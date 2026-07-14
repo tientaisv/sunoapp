@@ -788,6 +788,28 @@ async function viewSavedSong(id) {
         // Render Suno clips if any exist
         renderSunoClips(currentSongData.sunoClips);
 
+        // Tự động kích hoạt polling nếu có clip chưa hoàn thành (queued hoặc streaming)
+        const unfinishedClips = currentSongData.sunoClips.filter(c => c.status !== "complete" && c.status !== "failed");
+        if (unfinishedClips.length > 0) {
+            const clipIds = unfinishedClips.map(c => c.id);
+            const accountEmail = unfinishedClips[0].accountEmail;
+            const accounts = getSunoAccounts();
+            const account = accounts.find(a => a.email === accountEmail) || accounts[0];
+            if (account) {
+                const controls = document.getElementById("sunoGenControls");
+                const loading = document.getElementById("sunoGenLoading");
+                const loadingStatus = document.getElementById("sunoLoadingStatus");
+                const loadingSubtext = document.getElementById("sunoLoadingSubtext");
+                
+                if (controls) controls.style.display = "none";
+                if (loading) loading.style.display = "flex";
+                if (loadingStatus) loadingStatus.textContent = "Đang kiểm tra trạng thái clips...";
+                if (loadingSubtext) loadingSubtext.textContent = `Tài khoản: ${account.email}`;
+                
+                pollSunoStatus(clipIds, currentSongData.id, account);
+            }
+        }
+
         // Chuyển sang Tab 1
         const currentSongTabBtn = document.querySelector('.tab-btn[data-tab="current-song"]');
         if (currentSongTabBtn) {
@@ -1487,11 +1509,43 @@ function renderSunoAccounts() {
     lucide.createIcons();
 }
 
+// Cập nhật dropdown chọn tài khoản tạo nhạc
+function updateSunoAccountSelector() {
+    const select = document.getElementById("sunoAccountSelect");
+    if (!select) return;
+    
+    const accounts = getSunoAccounts();
+    const selectedVal = select.value || "random";
+    
+    select.innerHTML = '<option value="random">Xoay vòng ngẫu nhiên tài khoản</option>';
+    
+    accounts.forEach(acc => {
+        const isExpired = acc.expiry && (Date.now() > acc.expiry);
+        const statusText = isExpired ? " (Hết hạn)" : "";
+        const opt = document.createElement("option");
+        opt.value = acc.id;
+        opt.textContent = `${acc.email}${statusText}`;
+        if (isExpired) {
+            opt.style.color = "var(--color-danger)";
+        }
+        select.appendChild(opt);
+    });
+    
+    const exists = accounts.some(acc => acc.id === selectedVal);
+    if (exists || selectedVal === "random") {
+        select.value = selectedVal;
+    } else {
+        select.value = "random";
+    }
+}
+
 // Cập nhật giao diện cảnh báo cấu hình Suno
 function updateSunoUIState() {
     const accounts = getSunoAccounts();
     const warning = document.getElementById("sunoConfigWarning");
     const controls = document.getElementById("sunoGenControls");
+    
+    updateSunoAccountSelector();
     
     if (accounts.length > 0) {
         if (warning) warning.style.display = "none";
@@ -1510,8 +1564,20 @@ async function generateSunoMusic() {
         return;
     }
     
-    // Chọn ngẫu nhiên 1 tài khoản trong danh sách
-    let startIndex = Math.floor(Math.random() * accounts.length);
+    const select = document.getElementById("sunoAccountSelect");
+    const selectedVal = select ? select.value : "random";
+    
+    let startIndex = 0;
+    if (selectedVal === "random") {
+        startIndex = Math.floor(Math.random() * accounts.length);
+    } else {
+        const foundIdx = accounts.findIndex(acc => acc.id === selectedVal);
+        if (foundIdx > -1) {
+            startIndex = foundIdx;
+        } else {
+            startIndex = Math.floor(Math.random() * accounts.length);
+        }
+    }
     
     const controls = document.getElementById("sunoGenControls");
     const loading = document.getElementById("sunoGenLoading");
