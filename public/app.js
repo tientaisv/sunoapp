@@ -1686,8 +1686,8 @@ function pollSunoStatus(clipIds, songId, account) {
             const anyStreaming = formattedClips.some(c => c.status === "streaming");
             
             if (anyStreaming) {
-                loadingStatus.textContent = "Đang kết xuất và phát trực tiếp" + dotStr;
-                loadingSubtext.textContent = "Bạn đã có thể nghe thử trước phần nhạc đang được tải.";
+                loadingStatus.textContent = "Đang kết xuất giai điệu" + dotStr;
+                loadingSubtext.textContent = "Nhạc sĩ AI đang kết xuất nhạc. Vui lòng chờ hoàn thành để nghe thử.";
             } else {
                 loadingStatus.textContent = "Đang xử lý giai điệu" + dotStr;
             }
@@ -1741,7 +1741,7 @@ function renderSunoClips(clips) {
                 ${clip.accountEmail ? `<div class="suno-clip-account" style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 2px;"><i data-lucide="user" style="width: 11px; height: 11px;"></i> ${escapeHTML(clip.accountEmail)}</div>` : ''}
                 <div class="suno-clip-status status-${clip.status || 'queued'}" style="margin-top: 4px;">${statusText}</div>
                 
-                ${(clip.status === 'complete' || clip.status === 'streaming') && clip.audioUrl ? `
+                ${clip.status === 'complete' && clip.audioUrl ? `
                     <div class="suno-clip-player-wrapper">
                         <audio src="${clip.audioUrl}" controls class="suno-clip-audio"></audio>
                         <div class="suno-clip-actions" id="actions-${clip.id}">
