@@ -1,0 +1,32 @@
+# Local configuration
+.env
+
+# Local database and data storage
+data/
+
+# Compiled Go binaries
+suno-composer
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# IDE configurations
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

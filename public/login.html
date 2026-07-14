@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập - Suno Music Composer</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: radial-gradient(circle at 50% 50%, #0f172a 0%, #020617 100%);
+            font-family: 'Outfit', -apple-system, sans-serif;
+            color: #fff;
+        }
+        
+        .login-card {
+            background: rgba(30, 41, 59, 0.45);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            text-align: center;
+        }
+        
+        .login-logo {
+            margin-bottom: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: #fff;
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+        }
+        
+        .login-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #fff 30%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .login-subtitle {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 32px;
+        }
+        
+        .error-message {
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            margin-bottom: 20px;
+            display: none;
+            text-align: left;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-login {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border: none;
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        }
+        
+        .btn-login:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+        }
+        
+        .btn-login:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-logo">
+            <i data-lucide="music-4" style="width: 32px; height: 32px;"></i>
+        </div>
+        <h2 class="login-title">Suno Music Composer</h2>
+        <div class="login-subtitle">Nhập mật khẩu truy cập hệ thống</div>
+        
+        <div id="errorAlert" class="error-message">
+            <i data-lucide="alert-circle" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+            <span id="errorText">Mật khẩu không đúng</span>
+        </div>
+        
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group" style="text-align: left; margin-bottom: 24px;">
+                <label for="password" style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px; display: block;">Mật khẩu:</label>
+                <div style="position: relative;">
+                    <input type="password" id="password" class="input-control" placeholder="••••••••" style="padding-left: 36px; width: 100%; box-sizing: border-box; background: rgba(15, 23, 42, 0.4);" required autofocus>
+                    <i data-lucide="lock" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: rgba(255,255,255,0.4);"></i>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-login">
+                <span>Đăng nhập</span>
+                <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i>
+            </button>
+        </form>
+    </div>
+    
+    <script>
+        lucide.createIcons();
+        
+        async function handleLogin(event) {
+            event.preventDefault();
+            const passwordInput = document.getElementById("password");
+            const errorAlert = document.getElementById("errorAlert");
+            const errorText = document.getElementById("errorText");
+            const btn = document.querySelector(".btn-login");
+            
+            errorAlert.style.display = "none";
+            btn.disabled = true;
+            btn.querySelector("span").textContent = "Đang xử lý...";
+            
+            try {
+                const response = await fetch("/api/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ password: passwordInput.value })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    window.location.href = "/";
+                } else {
+                    errorText.textContent = data.error || "Mật khẩu không chính xác";
+                    errorAlert.style.display = "flex";
+                    passwordInput.value = "";
+                    passwordInput.focus();
+                }
+            } catch (e) {
+                errorText.textContent = "Không thể kết nối đến máy chủ";
+                errorAlert.style.display = "flex";
+            } finally {
+                btn.disabled = false;
+                btn.querySelector("span").textContent = "Đăng nhập";
+            }
+        }
+    </script>
+</body>
+</html>

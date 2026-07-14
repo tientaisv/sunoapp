@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  composer:
+    build: .
+    container_name: suno-composer-app
+    ports:
+      - "31:8080" # Ánh xạ từ cổng 8080 của container sang cổng 31 của máy host
+    env_file:
+      - .env # Tự động load các biến cấu hình từ file .env (ví dụ: GEMINI_KEYS)
+    volumes:
+      - ./data:/root/data # Đồng bộ lưu trữ lịch sử bài hát ra thư mục data ở máy host
+    restart: unless-stopped

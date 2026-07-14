@@ -1,0 +1,1788 @@
+// Khởi chạy Lucide Icons
+document.addEventListener("DOMContentLoaded", () => {
+    lucide.createIcons();
+    initUIHandlers();
+    initSunoIntegration();
+    checkAuthStatus();
+});
+
+// Lưu trữ dữ liệu bài hát đã tạo
+let currentSongData = {
+    key: "",
+    style: "",
+    lyrics: ""
+};
+
+// Khởi tạo các sự kiện giao diện
+function initUIHandlers() {
+    // 1. Xử lý Single Select cho các nhóm Button
+    setupGroupSelection("catholicDegree");
+    setupGroupSelection("verses");
+    setupGroupSelection("chorusPitch");
+    setupGroupSelection("tempo");
+    setupGroupSelection("vocalHarmony");
+    setupGroupSelection("vocalTechnique");
+    setupGroupSelection("vocalPlacement");
+
+    // 2. Xử lý Single Select cho Chips (Genre, Voice, Mood)
+    setupChipSingleSelection("genre");
+    setupChipSingleSelection("voiceStyle");
+    setupChipSingleSelection("mood");
+
+    // 3. Xử lý Multi Select cho Nhạc cụ
+    setupChipMultiSelection("instruments");
+
+    // 4. Xử lý chọn màu sắc không khí âm nhạc
+    const colorBtns = document.querySelectorAll(".color-btn");
+    const customColorPicker = document.getElementById("customColorPicker");
+    const customColorName = document.getElementById("customColorName");
+
+    function updateThemeColor(hexColor) {
+        document.documentElement.style.setProperty("--color-primary", hexColor);
+        const glow1 = document.querySelector(".glow-bg-1");
+        if (glow1) {
+            glow1.style.background = `radial-gradient(circle, ${hexColor} 0%, transparent 70%)`;
+        }
+    }
+
+    colorBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            colorBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            
+            // Reset ô tự nhập
+            customColorName.value = "";
+            
+            const themeColor = btn.style.getPropertyValue("--color-theme");
+            updateThemeColor(themeColor);
+            customColorPicker.value = themeColor;
+        });
+    });
+
+    // Lắng nghe thay đổi màu sắc từ bảng chọn màu
+    customColorPicker.addEventListener("input", (e) => {
+        colorBtns.forEach(b => b.classList.remove("active"));
+        updateThemeColor(e.target.value);
+    });
+
+    // Lắng nghe sự kiện người dùng gõ tên màu sắc cảm xúc
+    customColorName.addEventListener("input", () => {
+        colorBtns.forEach(b => b.classList.remove("active"));
+        updateThemeColor(customColorPicker.value);
+    });
+
+    // 5. Xử lý Click Gợi ý nhanh
+    const suggestChips = document.querySelectorAll(".suggest-chip");
+    const topicTextarea = document.getElementById("topic");
+    suggestChips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            topicTextarea.value = chip.textContent;
+            
+            // Tự động chuyển mức độ Công giáo thành "Đậm chất Công giáo" khi chọn các gợi ý thánh ca
+            const catholicGroup = document.getElementById("catholicDegree");
+            const firstBtn = catholicGroup.querySelector(".btn-item");
+            if (firstBtn) {
+                catholicGroup.querySelectorAll(".btn-item").forEach(b => b.classList.remove("active"));
+                firstBtn.classList.add("active");
+            }
+            
+            // Tự động chọn thể loại "Thánh ca Đương đại" hoặc "Thánh ca Truyền thống"
+            const genreGroup = document.getElementById("genre");
+            const tcChip = genreGroup.querySelector('[data-val="Thánh ca Đương đại"]') || genreGroup.querySelector('[data-val="Thánh ca Truyền thống"]');
+            if (tcChip) {
+                genreGroup.querySelectorAll(".chip-item").forEach(c => c.classList.remove("active"));
+                tcChip.classList.add("active");
+            }
+
+            topicTextarea.focus();
+            
+            // Hiệu ứng nhấp nháy viền khi chọn gợi ý
+            topicTextarea.style.borderColor = "var(--color-primary)";
+            setTimeout(() => {
+                topicTextarea.style.borderColor = "var(--border-color)";
+            }, 1000);
+        });
+    });
+
+    // 6. Xử lý bật/tắt Hợp âm
+    const chordToggle = document.getElementById("chordToggle");
+    chordToggle.addEventListener("change", () => {
+        if (currentSongData.lyrics) {
+            renderLyrics(currentSongData.lyrics, chordToggle.checked);
+        }
+    });
+
+    // 7. Xử lý nút Tạo bài hát
+    const composeBtn = document.getElementById("composeBtn");
+    composeBtn.addEventListener("click", handleCompose);
+
+    // 8. Xử lý nút Copy
+    const copyBtns = document.querySelectorAll(".btn-copy");
+    copyBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const targetId = btn.getAttribute("data-target");
+            let textToCopy = "";
+
+            if (targetId === "styleText") {
+                textToCopy = document.getElementById("styleText").textContent;
+            } else if (targetId === "lyricsText") {
+                textToCopy = getVisibleLyrics();
+            }
+
+            copyToClipboard(textToCopy, btn);
+        });
+    });
+
+    // 9. Xử lý chuyển đổi Tab (Tác phẩm & Lịch sử)
+    const tabBtns = document.querySelectorAll(".tab-btn");
+    tabBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            tabBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+
+            const tabTarget = btn.getAttribute("data-tab");
+            document.querySelectorAll(".tab-content").forEach(tc => {
+                tc.style.display = "none";
+                tc.classList.remove("active");
+            });
+
+            const activeContent = document.getElementById("tab-" + tabTarget);
+            if (activeContent) {
+                activeContent.style.display = "block";
+                activeContent.classList.add("active");
+            }
+
+            // Nếu mở tab Lịch sử, tải lại danh sách
+            if (tabTarget === "history-library") {
+                loadHistory();
+            }
+        });
+    });
+
+    // 10. Xử lý các nút Chỉnh sửa bài hát hiện tại
+    const btnEditSong = document.getElementById("btnEditSong");
+    const btnSaveSong = document.getElementById("btnSaveSong");
+    const btnCancelEdit = document.getElementById("btnCancelEdit");
+    const btnDownloadPDF = document.getElementById("btnDownloadPDF");
+    const btnRemixSong = document.getElementById("btnRemixSong");
+    const btnRewriteSong = document.getElementById("btnRewriteSong");
+
+    const resTitleDisplay = document.getElementById("resTitleDisplay");
+    const titleInput = document.getElementById("titleInput");
+    const styleText = document.getElementById("styleText");
+    const styleInput = document.getElementById("styleInput");
+    const lyricsTextWrapper = document.getElementById("lyricsTextWrapper");
+    const lyricsEditWrapper = document.getElementById("lyricsEditWrapper");
+    const lyricsEditInput = document.getElementById("lyricsEditInput");
+
+    const abcEditCard = document.getElementById("abcEditCard");
+    const abcEditInput = document.getElementById("abcEditInput");
+
+    btnEditSong.addEventListener("click", () => {
+        // Tắt hiển thị tĩnh, bật chế độ sửa
+        resTitleDisplay.style.display = "none";
+        titleInput.style.display = "block";
+        titleInput.value = currentSongData.title;
+
+        styleText.style.display = "none";
+        styleInput.style.display = "block";
+        styleInput.value = currentSongData.style;
+
+        lyricsTextWrapper.style.display = "none";
+        lyricsEditWrapper.style.display = "block";
+        lyricsEditInput.value = currentSongData.lyrics; // Lấy lời gốc kèm hợp âm để sửa
+
+        abcEditCard.style.display = "block";
+        abcEditInput.value = currentSongData.abcNotation || "";
+
+        btnEditSong.style.display = "none";
+        btnSaveSong.style.display = "inline-flex";
+        btnCancelEdit.style.display = "inline-flex";
+        btnDownloadPDF.style.display = "none";
+        if (btnRemixSong) btnRemixSong.style.display = "none";
+        if (btnRewriteSong) btnRewriteSong.style.display = "none";
+    });
+
+    btnCancelEdit.addEventListener("click", () => {
+        // Quay lại hiển thị tĩnh
+        resTitleDisplay.style.display = "block";
+        titleInput.style.display = "none";
+
+        styleText.style.display = "block";
+        styleInput.style.display = "none";
+
+        lyricsTextWrapper.style.display = "block";
+        lyricsEditWrapper.style.display = "none";
+
+        abcEditCard.style.display = "none";
+
+        btnEditSong.style.display = "inline-flex";
+        btnSaveSong.style.display = "none";
+        btnCancelEdit.style.display = "none";
+        btnDownloadPDF.style.display = "inline-flex";
+        if (btnRemixSong) btnRemixSong.style.display = "inline-flex";
+        if (btnRewriteSong) btnRewriteSong.style.display = "inline-flex";
+    });
+
+    // Sự kiện Remix & Rewrite
+    if (btnRemixSong) {
+        btnRemixSong.addEventListener("click", () => {
+            handleCompose("remix");
+        });
+    }
+
+    if (btnRewriteSong) {
+        btnRewriteSong.addEventListener("click", () => {
+            const promptText = prompt("Nhập ý tưởng/chủ đề hoặc yêu cầu điều chỉnh để viết lại lời mới cho bài hát này (ví dụ: 'viết lại lời sang chủ đề hy vọng', 'viết lại lời về ơn cha mẹ...'):");
+            if (promptText && promptText.trim() !== "") {
+                handleCompose("rewrite", promptText.trim());
+            }
+        });
+    }
+
+    btnSaveSong.addEventListener("click", async () => {
+        const editedTitle = titleInput.value.trim();
+        const editedStyle = styleInput.value.trim();
+        const editedLyrics = lyricsEditInput.value.trim();
+        const editedAbc = abcEditInput.value.trim();
+
+        if (!editedTitle) {
+            alert("Tiêu đề bài hát không được để trống!");
+            return;
+        }
+        if (!editedLyrics) {
+            alert("Lời bài hát không được để trống!");
+            return;
+        }
+
+        btnSaveSong.disabled = true;
+        btnSaveSong.innerHTML = `<i data-lucide="loader-2" class="animate-spin"></i> Đang lưu...`;
+        lucide.createIcons();
+
+        try {
+            const response = await fetch("/api/songs", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    id: currentSongData.id,
+                    title: editedTitle,
+                    style: editedStyle,
+                    lyrics: editedLyrics,
+                    abcNotation: editedAbc
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Không thể cập nhật bài hát.");
+            }
+
+            // Cập nhật lại state
+            currentSongData.title = data.title;
+            currentSongData.style = data.style;
+            currentSongData.lyrics = data.lyrics;
+            currentSongData.abcNotation = data.abcNotation || "";
+
+            // Render lại giao diện
+            resTitleDisplay.textContent = currentSongData.title;
+            styleText.textContent = currentSongData.style;
+            const showChords = document.getElementById("chordToggle").checked;
+            renderLyrics(currentSongData.lyrics, showChords);
+            renderSheetMusic(currentSongData.abcNotation);
+
+            btnCancelEdit.click();
+            updateHistoryCount();
+        } catch (error) {
+            alert("Lỗi khi lưu: " + error.message);
+        } finally {
+            btnSaveSong.disabled = false;
+            btnSaveSong.innerHTML = `<i data-lucide="save"></i> Lưu chỉnh sửa`;
+            lucide.createIcons();
+        }
+    });
+
+    // Sự kiện tải PDF
+    btnDownloadPDF.addEventListener("click", downloadPDF);
+
+    // 11. Các sự kiện phụ
+    document.getElementById("btnRefreshHistory").addEventListener("click", loadHistory);
+
+    // Tải trước số lượng bài hát đã sáng tác
+    updateHistoryCount();
+}
+
+// Thiết lập chọn nhiều nút trong group (Cho phép chọn nhiều)
+function setupGroupSelection(groupId) {
+    const container = document.getElementById(groupId);
+    if (!container) return;
+    
+    const items = container.querySelectorAll(".btn-item");
+    items.forEach(item => {
+        item.addEventListener("click", () => {
+            item.classList.toggle("active");
+        });
+    });
+}
+
+// Thiết lập chọn nhiều chips trong tập hợp chips (Cho phép chọn nhiều)
+function setupChipSingleSelection(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const chips = container.querySelectorAll(".chip-item");
+    chips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            chip.classList.toggle("active");
+        });
+    });
+}
+
+// Thiết lập chọn nhiều chips (Multi Select)
+function setupChipMultiSelection(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const chips = container.querySelectorAll(".chip-item");
+    chips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            chip.classList.toggle("active");
+        });
+    });
+}
+
+// Lấy danh sách các giá trị đang hoạt động của Button Group dưới dạng chuỗi nối nhau bằng dấu phẩy
+function getGroupValue(groupId) {
+    const container = document.getElementById(groupId);
+    if (!container) return "";
+    const actives = container.querySelectorAll(".btn-item.active");
+    const values = [];
+    actives.forEach(a => values.push(a.getAttribute("data-val")));
+    return values.join(", ");
+}
+
+// Lấy danh sách các giá trị đang hoạt động của Chips dưới dạng chuỗi nối nhau bằng dấu phẩy
+function getChipValue(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return "";
+    const actives = container.querySelectorAll(".chip-item.active");
+    const values = [];
+    actives.forEach(a => values.push(a.getAttribute("data-val")));
+    return values.join(", ");
+}
+
+// Lấy danh sách các giá trị đang hoạt động của Chips (Multi Select)
+function getMultiChipValues(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+    const actives = container.querySelectorAll(".chip-item.active");
+    const values = [];
+    actives.forEach(a => values.push(a.getAttribute("data-val")));
+    return values;
+}
+
+// Hàm gửi request sáng tác bài hát lên Backend Go
+async function handleCompose(mode, extraParam) {
+    const topic = document.getElementById("topic").value.trim();
+    if (!topic) {
+        alert("Vui lòng nhập ý tưởng hoặc chủ đề bài hát trước khi tạo!");
+        document.getElementById("topic").focus();
+        return;
+    }
+
+    // Thu thập dữ liệu form
+    const catholicDegree = getGroupValue("catholicDegree");
+    const versesVal = getGroupValue("verses");
+    let verses = 2;
+    if (versesVal) {
+        const nums = versesVal.split(",").map(v => parseInt(v.trim(), 10)).filter(v => !isNaN(v));
+        if (nums.length > 0) {
+            verses = Math.max(...nums);
+        }
+    }
+    const repeatVerse = document.getElementById("repeatVerse").checked;
+    const chorusPitch = getGroupValue("chorusPitch");
+    const musicKey = document.getElementById("musicKey").value;
+    const tempo = getGroupValue("tempo");
+    
+    const genre = getChipValue("genre");
+    const voice = getChipValue("voiceStyle");
+    const mood = getChipValue("mood");
+    const instruments = getMultiChipValues("instruments");
+
+    const vocalHarmony = getGroupValue("vocalHarmony");
+    const vocalTechnique = getGroupValue("vocalTechnique");
+    const vocalPlacement = getGroupValue("vocalPlacement");
+
+    // Lấy màu sắc cảm xúc hiện tại
+    const activeColorBtn = document.querySelector(".color-btn.active");
+    let emotionColor = "";
+    if (activeColorBtn) {
+        emotionColor = activeColorBtn.textContent.trim();
+    } else {
+        const customColorNameVal = document.getElementById("customColorName").value.trim();
+        const hexVal = document.getElementById("customColorPicker").value;
+        if (customColorNameVal) {
+            emotionColor = `${customColorNameVal} (Mã màu: ${hexVal})`;
+        } else {
+            emotionColor = `Màu sắc tùy chọn (Mã màu: ${hexVal})`;
+        }
+    }
+    const moodWithColor = mood ? `${mood} (${emotionColor})` : emotionColor;
+
+    // Hiển thị trạng thái Loading
+    document.getElementById("emptyState").style.display = "none";
+    document.getElementById("resultContainer").style.display = "none";
+    document.getElementById("loadingState").style.display = "flex";
+    document.getElementById("composeBtn").disabled = true;
+    
+    // Tùy biến text loading
+    let loadingText = "Đang sáng tác...";
+    if (mode === "remix") loadingText = "Đang phối lại nhạc...";
+    if (mode === "rewrite") loadingText = "Đang viết lại lời mới...";
+    document.getElementById("composeBtn").innerHTML = `<i data-lucide="loader-2" class="animate-spin"></i> ${loadingText}`;
+    lucide.createIcons(); // reload icon loader-2 để có hiệu ứng xoay
+
+    try {
+        const response = await fetch("/api/compose", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                topic: topic,
+                catholicDegree: catholicDegree,
+                genre: genre || "Acoustic / Pop Ballad",
+                verses: verses,
+                repeatVerse: repeatVerse,
+                chorusPitch: chorusPitch,
+                voice: voice || "Nam trầm ấm",
+                tempo: tempo || "Vừa (Moderate)",
+                mood: moodWithColor,
+                instruments: instruments,
+                key: musicKey,
+                vocalHarmony: vocalHarmony,
+                vocalTechnique: vocalTechnique,
+                vocalPlacement: vocalPlacement,
+                existingLyrics: (mode === "remix" || mode === "rewrite") ? currentSongData.lyrics : "",
+                rewritePrompt: mode === "rewrite" ? extraParam : ""
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || "Gặp sự cố kết nối tới máy chủ.");
+        }
+
+        // Lưu trữ kết quả nhận được
+        currentSongData.id = data.id || "";
+        currentSongData.title = data.title || "";
+        currentSongData.key = data.key || musicKey || "Tự động";
+        currentSongData.style = data.style || "";
+        currentSongData.lyrics = data.lyrics || "";
+        currentSongData.abcNotation = data.abcNotation || "";
+        currentSongData.vocalHarmony = data.vocalHarmony || "";
+        currentSongData.vocalTechnique = data.vocalTechnique || "";
+        currentSongData.vocalPlacement = data.vocalPlacement || "";
+
+        // Hiển thị lên UI
+        document.getElementById("resTitleDisplay").textContent = currentSongData.title;
+        document.getElementById("resKey").textContent = currentSongData.key;
+        document.getElementById("styleText").textContent = currentSongData.style;
+        
+        const idText = document.getElementById("resSongId");
+        const idWrapper = document.getElementById("resSongIdWrapper");
+        if (currentSongData.id) {
+            idText.textContent = currentSongData.id;
+            idWrapper.style.display = "inline-flex";
+        } else {
+            idWrapper.style.display = "none";
+        }
+        
+        const showChords = document.getElementById("chordToggle").checked;
+        renderLyrics(currentSongData.lyrics, showChords);
+        renderSheetMusic(currentSongData.abcNotation);
+        
+        // Cập nhật lại đếm lịch sử
+        updateHistoryCount();
+
+        // Chuyển đổi trạng thái giao diện sang Kết quả
+        document.getElementById("loadingState").style.display = "none";
+        document.getElementById("resultContainer").style.display = "flex";
+        
+        // Cuộn mượt mà xuống phần kết quả
+        document.getElementById("resultContainer").scrollIntoView({ behavior: 'smooth' });
+
+    } catch (error) {
+        alert("Lỗi: " + error.message);
+        document.getElementById("loadingState").style.display = "none";
+        document.getElementById("emptyState").style.display = "flex";
+    } finally {
+        document.getElementById("composeBtn").disabled = false;
+        document.getElementById("composeBtn").innerHTML = `<i data-lucide="wand-2"></i> Tạo bài hát`;
+        lucide.createIcons();
+    }
+}
+
+// Xử lý và format lời bài hát
+function renderLyrics(lyricsText, showChords) {
+    const container = document.getElementById("lyricsText");
+    if (!lyricsText) {
+        container.innerHTML = "";
+        return;
+    }
+
+    // 1. Phân biệt hợp âm và tag phân đoạn của Suno
+    // Quy tắc: Hợp âm có dạng [Bm], [C], [F#m7], [D/F#] (không có khoảng trắng, ngắn hơn 8 ký tự)
+    // Phân đoạn Suno có dạng [Intro...], [Verse 1...], [Chorus...] (chứa khoảng trắng hoặc dài hơn 8 ký tự)
+    
+    // Tạo bản sao lời nhạc để xử lý
+    let formattedText = lyricsText;
+
+    if (!showChords) {
+        // Loại bỏ hoàn toàn các hợp âm trong ngoặc vuông
+        // Tìm các cặp [] có độ dài ngắn và không chứa dấu cách
+        formattedText = formattedText.replace(/\[([A-G][a-zA-Z0-9#\/+]*?)\]/g, "");
+    }
+
+    // 2. Chuyển đổi ký tự HTML để tránh lỗi XSS và hiển thị chuẩn xác
+    let escapedText = escapeHTML(formattedText);
+
+    // 3. Highlight các tag phân đoạn của Suno (e.g. [Intro...], [Verse 1...])
+    // Thay thế các tag [Phân đoạn...] thành class .suno-tag để hiển thị màu vàng và xuống hàng đẹp mắt
+    escapedText = escapedText.replace(/\[(Intro|Verse|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Solo|Drop|Fade|Key)(.*?)\]/gi, (match) => {
+        return `<span class="suno-tag">${match}</span>`;
+    });
+
+    // 4. Nếu hiển thị hợp âm, highlight các tag hợp âm còn lại
+    if (showChords) {
+        escapedText = escapedText.replace(/\[([A-G][a-zA-Z0-9#\/+]*?)\]/g, (match) => {
+            return `<span class="chord">${match}</span>`;
+        });
+    }
+
+    container.innerHTML = escapedText;
+}
+
+// Lấy lời bài hát đang hiển thị dạng text thuần tuý (dùng để copy)
+function getVisibleLyrics() {
+    const container = document.getElementById("lyricsText");
+    if (!container) return "";
+    
+    // Nếu hiện hợp âm, copy lời gốc có chèn ngoặc vuông hợp âm [Bm]
+    // Nếu tắt hợp âm, ta copy lời sạch
+    const showChords = document.getElementById("chordToggle").checked;
+    
+    if (showChords) {
+        return currentSongData.lyrics;
+    } else {
+        // Strip hợp âm
+        return currentSongData.lyrics.replace(/\[([A-G][a-zA-Z0-9#\/+]*?)\]/g, "");
+    }
+}
+
+// Copy văn bản vào Clipboard (Có fallback cho HTTP không bảo mật)
+function copyToClipboard(text, buttonElement) {
+    if (!text) return;
+    
+    function showSuccess() {
+        const originalHTML = buttonElement.innerHTML;
+        buttonElement.innerHTML = `<i data-lucide="check"></i> Đã chép!`;
+        buttonElement.classList.add("copied");
+        lucide.createIcons();
+
+        setTimeout(() => {
+            buttonElement.innerHTML = originalHTML;
+            buttonElement.classList.remove("copied");
+            lucide.createIcons();
+        }, 2000);
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(showSuccess).catch(err => {
+            console.error("Lỗi Clipboard API:", err);
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
+
+    function fallbackCopy(str) {
+        try {
+            const textarea = document.createElement("textarea");
+            textarea.value = str;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // cho mobile
+            
+            const successful = document.execCommand("copy");
+            document.body.removeChild(textarea);
+            
+            if (successful) {
+                showSuccess();
+            } else {
+                throw new Error("execCommand copy returned false");
+            }
+        } catch (err) {
+            console.error("Fallback copy error:", err);
+            alert("Trình duyệt không hỗ trợ tự động sao chép. Vui lòng bôi đen văn bản và sao chép thủ công.");
+        }
+    }
+}
+
+// Escape HTML ký tự đặc biệt
+function escapeHTML(str) {
+    return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+    );
+}
+
+// Cập nhật số lượng bài hát trên Tab
+async function updateHistoryCount() {
+    try {
+        const response = await fetch("/api/songs");
+        if (!response.ok) return;
+        const data = await response.json();
+        const countSpan = document.getElementById("historyCount");
+        if (countSpan) {
+            countSpan.textContent = data.length || 0;
+        }
+    } catch (e) {
+        console.error("Lỗi lấy số lượng lịch sử:", e);
+    }
+}
+
+// Tải và hiển thị danh sách bài hát trong lịch sử
+async function loadHistory() {
+    const listContainer = document.getElementById("historyList");
+    if (!listContainer) return;
+
+    listContainer.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+            <i data-lucide="loader-2" class="animate-spin" style="width: 24px; height: 24px; margin: 0 auto 10px;"></i>
+            <p>Đang đọc lịch sử...</p>
+        </div>
+    `;
+    lucide.createIcons();
+
+    try {
+        const response = await fetch("/api/songs");
+        if (!response.ok) throw new Error("Không thể kết nối API");
+        const songs = await response.json();
+
+        if (songs.length === 0) {
+            listContainer.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+                    <i data-lucide="folder-open" style="width: 48px; height: 48px; margin: 0 auto 16px; opacity: 0.5;"></i>
+                    <p>Chưa có bài hát nào được sáng tác.</p>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
+        listContainer.innerHTML = "";
+        songs.forEach(song => {
+            const card = document.createElement("div");
+            card.className = "history-card";
+            
+            const dateStr = new Date(song.createdAt).toLocaleString('vi-VN', {
+                year: 'numeric', month: 'numeric', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+
+            card.innerHTML = `
+                <div class="history-card-header">
+                    <span class="history-card-title">${escapeHTML(song.title)}</span>
+                    <span class="history-card-date">${dateStr}</span>
+                </div>
+                <div class="history-card-topic">${escapeHTML(song.topic)}</div>
+                <div class="history-card-meta">
+                    <span class="history-card-badge">Tông: ${song.key || "Tự động"}</span>
+                    <span class="history-card-badge">Thể loại: ${song.genre}</span>
+                    <span class="history-card-badge">Giọng: ${song.voice}</span>
+                    <span class="history-card-badge">Nhịp: ${song.tempo}</span>
+                </div>
+                <div class="history-card-actions">
+                    <button class="btn-action btn-load-song" data-id="${song.id}">
+                        <i data-lucide="eye"></i> Xem & Sửa
+                    </button>
+                    <button class="btn-action btn-remix-song" data-id="${song.id}">
+                        <i data-lucide="rotate-ccw"></i> Nạp cấu hình
+                    </button>
+                    <button class="btn-action btn-danger btn-delete-song" data-id="${song.id}">
+                        <i data-lucide="trash-2"></i> Xóa
+                    </button>
+                </div>
+            `;
+            listContainer.appendChild(card);
+        });
+
+        lucide.createIcons();
+
+        // Đăng ký sự kiện cho các nút
+        listContainer.querySelectorAll(".btn-load-song").forEach(btn => {
+            btn.addEventListener("click", () => viewSavedSong(btn.getAttribute("data-id")));
+        });
+        
+        listContainer.querySelectorAll(".btn-remix-song").forEach(btn => {
+            btn.addEventListener("click", () => loadSongConfig(btn.getAttribute("data-id")));
+        });
+
+        listContainer.querySelectorAll(".btn-delete-song").forEach(btn => {
+            btn.addEventListener("click", () => deleteSavedSong(btn.getAttribute("data-id")));
+        });
+
+    } catch (error) {
+        listContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--color-danger);">
+                Lỗi tải lịch sử: ${error.message}
+            </div>
+        `;
+    }
+}
+
+// Xem chi tiết bài hát cũ (Load vào Tab 1 để xem và sửa)
+async function viewSavedSong(id) {
+    try {
+        const response = await fetch(`/api/songs?id=${id}`);
+        if (!response.ok) throw new Error("Lỗi tải chi tiết bài hát");
+        const song = await response.json();
+
+        // Nạp vào state
+        currentSongData.id = song.id;
+        currentSongData.title = song.title;
+        currentSongData.key = song.key || "Tự động";
+        currentSongData.style = song.style;
+        currentSongData.lyrics = song.lyrics;
+        currentSongData.abcNotation = song.abcNotation || "";
+        currentSongData.vocalHarmony = song.vocalHarmony || "";
+        currentSongData.vocalTechnique = song.vocalTechnique || "";
+        currentSongData.vocalPlacement = song.vocalPlacement || "";
+        currentSongData.sunoClips = song.sunoClips || [];
+
+        // Render UI
+        document.getElementById("resTitleDisplay").textContent = currentSongData.title;
+        document.getElementById("resKey").textContent = currentSongData.key;
+        document.getElementById("styleText").textContent = currentSongData.style;
+        
+        const idText = document.getElementById("resSongId");
+        const idWrapper = document.getElementById("resSongIdWrapper");
+        idText.textContent = currentSongData.id;
+        idWrapper.style.display = "inline-flex";
+
+        const showChords = document.getElementById("chordToggle").checked;
+        renderLyrics(currentSongData.lyrics, showChords);
+        renderSheetMusic(currentSongData.abcNotation);
+        
+        // Render Suno clips if any exist
+        renderSunoClips(currentSongData.sunoClips);
+
+        // Chuyển sang Tab 1
+        const currentSongTabBtn = document.querySelector('.tab-btn[data-tab="current-song"]');
+        if (currentSongTabBtn) {
+            currentSongTabBtn.click();
+        }
+
+        // Hiển thị kết quả, ẩn empty state
+        document.getElementById("emptyState").style.display = "none";
+        document.getElementById("loadingState").style.display = "none";
+        document.getElementById("resultContainer").style.display = "flex";
+
+    } catch (e) {
+        alert("Không thể tải bài hát: " + e.message);
+    }
+}
+
+// Nạp lại các thiết bị lọc/ý tưởng của bài hát cũ vào Form trái
+async function loadSongConfig(id) {
+    try {
+        const response = await fetch(`/api/songs?id=${id}`);
+        if (!response.ok) throw new Error("Lỗi tải cấu hình bài hát");
+        const song = await response.json();
+
+        // 1. Nhập ý tưởng
+        document.getElementById("topic").value = song.topic;
+
+        // 2. Mức độ Công giáo
+        setGroupActiveValue("catholicDegree", song.catholicDegree);
+
+        // 3. Số lượng Lời & Checkbox
+        setGroupActiveValue("verses", song.verses);
+        document.getElementById("repeatVerse").checked = song.repeatVerse;
+
+        // 4. Cao độ Điệp khúc & Tông Key
+        setGroupActiveValue("chorusPitch", song.chorusPitch);
+        document.getElementById("musicKey").value = song.key;
+
+        // 5. Tốc độ Tempo
+        setGroupActiveValue("tempo", song.tempo);
+
+        // 6. Thể loại, Giọng hát, Tâm trạng (Chips)
+        setChipActiveValue("genre", song.genre);
+        setChipActiveValue("voiceStyle", song.voice);
+        
+        // Phân tích tâm trạng và phục hồi màu sắc
+        let cleanMood = song.mood;
+        if (song.mood.includes("(")) {
+            const parts = song.mood.split("(");
+            cleanMood = parts[0].trim();
+            
+            // Phục hồi màu sắc tùy chỉnh
+            const colorPart = parts[1].replace(")", "").trim();
+            const hexMatch = colorPart.match(/#([a-fA-F0-9]{6})/);
+            
+            if (hexMatch) {
+                const hexColor = hexMatch[0];
+                const customName = colorPart.split("Mã màu:")[0].trim();
+                
+                // Active custom color
+                document.getElementById("customColorPicker").value = hexColor;
+                document.getElementById("customColorName").value = customName;
+                
+                // Tắt tất cả màu preset
+                document.querySelectorAll(".color-btn").forEach(b => b.classList.remove("active"));
+                
+                // Cập nhật màu giao diện
+                updateThemeColor(hexColor);
+            }
+        }
+        setChipActiveValue("mood", cleanMood);
+
+        // 7. Nhạc cụ (Multi select)
+        setMultiChipActiveValues("instruments", song.instruments || []);
+
+        // 8. Phục hồi cấu hình phối bè
+        setGroupActiveValue("vocalHarmony", song.vocalHarmony);
+        setGroupActiveValue("vocalTechnique", song.vocalTechnique);
+        setGroupActiveValue("vocalPlacement", song.vocalPlacement);
+
+        // Chuyển sang Tab 1 để người dùng sẵn sàng nhấn nút Sáng Tác
+        const currentSongTabBtn = document.querySelector('.tab-btn[data-tab="current-song"]');
+        if (currentSongTabBtn) {
+            currentSongTabBtn.click();
+        }
+
+        // Highlight nhẹ textarea để báo hiệu đã load
+        const topicArea = document.getElementById("topic");
+        topicArea.style.boxShadow = "0 0 15px var(--color-primary)";
+        setTimeout(() => {
+            topicArea.style.boxShadow = "none";
+        }, 1200);
+
+        alert("Đã khôi phục toàn bộ cấu hình bộ lọc của bài hát này sang bảng bên trái!");
+    } catch (e) {
+        alert("Lỗi nạp cấu hình: " + e.message);
+    }
+}
+
+// Xóa bài hát khỏi lịch sử
+async function deleteSavedSong(id) {
+    if (!confirm("Bạn có chắc chắn muốn xóa bài hát này khỏi lịch sử lưu trữ không?")) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/songs?id=${id}`, {
+            method: "DELETE"
+        });
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || "Lỗi xóa bài hát");
+        }
+
+        // Nếu bài hát đang xem chính là bài vừa xóa, ẩn kết quả đi
+        if (currentSongData.id === id) {
+            currentSongData = { id: "", title: "", key: "", style: "", lyrics: "" };
+            document.getElementById("resultContainer").style.display = "none";
+            document.getElementById("emptyState").style.display = "flex";
+        }
+
+        loadHistory();
+        updateHistoryCount();
+    } catch (e) {
+        alert("Không thể xóa: " + e.message);
+    }
+}
+
+// Helper set active cho Button Group (Hỗ trợ nhiều giá trị cách nhau bằng dấu phẩy)
+function setGroupActiveValue(groupId, val) {
+    const container = document.getElementById(groupId);
+    if (!container) return;
+    
+    let vals = [];
+    if (typeof val === 'string') {
+        vals = val.split(",").map(v => v.trim());
+    } else if (Array.isArray(val)) {
+        vals = val;
+    } else if (val !== undefined && val !== null) {
+        vals = [val.toString().trim()];
+    }
+
+    container.querySelectorAll(".btn-item").forEach(item => {
+        const itemVal = item.getAttribute("data-val");
+        if (vals.includes(itemVal)) {
+            item.classList.add("active");
+        } else {
+            item.classList.remove("active");
+        }
+    });
+}
+
+// Helper set active cho Chips (Hỗ trợ nhiều giá trị cách nhau bằng dấu phẩy)
+function setChipActiveValue(containerId, val) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    let vals = [];
+    if (typeof val === 'string') {
+        vals = val.split(",").map(v => v.trim());
+    } else if (Array.isArray(val)) {
+        vals = val;
+    } else if (val !== undefined && val !== null) {
+        vals = [val.toString().trim()];
+    }
+
+    container.querySelectorAll(".chip-item").forEach(chip => {
+        const chipVal = chip.getAttribute("data-val");
+        if (vals.includes(chipVal)) {
+            chip.classList.add("active");
+        } else {
+            chip.classList.remove("active");
+        }
+    });
+}
+
+// Helper set active cho Multi select Chips
+function setMultiChipActiveValues(containerId, values) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.querySelectorAll(".chip-item").forEach(chip => {
+        const chipVal = chip.getAttribute("data-val");
+        if (values.includes(chipVal)) {
+            chip.classList.add("active");
+        } else {
+            chip.classList.remove("active");
+        }
+    });
+}
+
+// Vẽ khuôn nhạc (Sheet nhạc nốt) bằng abcjs
+function renderSheetMusic(abcString) {
+    const card = document.getElementById("sheetMusicCard");
+    const container = document.getElementById("abcSheetMusic");
+    
+    if (!container) return;
+
+    if (!abcString || abcString.trim() === "") {
+        if (card) card.style.display = "none";
+        container.innerHTML = "";
+        return;
+    }
+
+    if (card) card.style.display = "block";
+    try {
+        ABCJS.renderAbc("abcSheetMusic", abcString, {
+            responsive: "resize",
+            paddingtop: 0,
+            paddingbottom: 0,
+            paddingright: 10,
+            paddingleft: 10,
+            scale: 0.9,
+            add_classes: true
+        });
+    } catch (e) {
+        console.error("Lỗi vẽ sheet nhạc abcjs:", e);
+        if (card) card.style.display = "none";
+        container.innerHTML = "";
+    }
+}
+
+// Helper xử lý làm sạch lời bài hát và định dạng hợp âm chữ đỏ cho PDF
+function processLyricsForPDF(rawLyrics) {
+    const lines = rawLyrics.split("\n");
+    const outputLines = [];
+
+    for (let line of lines) {
+        let lineProcessed = line;
+        
+        // Kiểm tra xem dòng này có chứa lời hát thực tế (không phải nhãn hay hợp âm) hay không.
+        // Hợp âm và nhãn nằm trong ngoặc vuông, nếu xóa hết thì phần chữ còn lại phải dài hơn 0.
+        const lyricTextOnly = line.replace(/\[.*?\]/g, "").trim();
+        const hasLyricsContent = lyricTextOnly.length > 0;
+
+        // Nếu dòng này không chứa ca từ hát thực tế (ví dụ dòng dạo hợp âm [Bm] [G] [A] hay dòng nhãn [Intro]), ta bỏ qua cả dòng
+        if (!hasLyricsContent) {
+            continue;
+        }
+
+        // Tìm các thẻ trong ngoặc vuông [x]
+        const bracketRegex = /\[(.*?)\]/g;
+        const matches = [...line.matchAll(bracketRegex)];
+
+        for (let match of matches) {
+            const innerText = match[1].trim();
+            
+            // Nhận diện xem có phải nhãn phân đoạn/nhạc dạo/hook/solo/interlude hay không
+            const isKnownTag = /^(Intro|Verse|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Solo|Hook|Drop|Fade|Key|End|Guitar|Piano|Drum|Soft|Interlude|Transition)/i.test(innerText);
+            // Hợp âm: Thường ngắn dưới 8 ký tự, bắt đầu bằng A-G
+            const isChord = !isKnownTag && innerText.length <= 8 && /^[A-G][a-zA-Z0-9#\/+]*$/.test(innerText);
+
+            if (isChord) {
+                // Đổi thành chữ đỏ đậm, bỏ ngoặc vuông
+                const chordSpan = `<span style="color: #dc2626; font-weight: bold; font-family: 'Outfit', sans-serif; font-size: 12.5px; margin: 0 2px;">${innerText}</span>`;
+                lineProcessed = lineProcessed.replace(match[0], chordSpan);
+            } else {
+                // Xóa bỏ các nhãn phân đoạn, nhạc dạo, hook, solo
+                lineProcessed = lineProcessed.replace(match[0], "");
+            }
+        }
+
+        outputLines.push(lineProcessed);
+    }
+
+    // Ghép lại và dọn dẹp dòng trống thừa
+    return outputLines.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+// Tạo và tải file PDF lời, hợp âm kèm sheet nhạc nốt
+function downloadPDF() {
+    if (!currentSongData.lyrics) {
+        alert("Chưa có bài hát nào được nạp hiển thị để tải PDF!");
+        return;
+    }
+
+    const element = document.createElement("div");
+    element.style.padding = "35px 45px";
+    element.style.background = "#ffffff";
+    element.style.color = "#1e293b";
+    element.style.fontFamily = "'Outfit', 'Plus Jakarta Sans', sans-serif";
+
+    // 1. Tiêu đề
+    const titleEl = document.createElement("h1");
+    titleEl.textContent = currentSongData.title || "Tác phẩm không tên";
+    titleEl.style.textAlign = "center";
+    titleEl.style.fontSize = "26px";
+    titleEl.style.fontWeight = "700";
+    titleEl.style.color = "#000000";
+    titleEl.style.marginBottom = "6px";
+    element.appendChild(titleEl);
+
+    // 2. Tác giả
+    const authorEl = document.createElement("p");
+    authorEl.textContent = "Tác giả: Người con tội lỗi";
+    authorEl.style.textAlign = "center";
+    authorEl.style.fontSize = "13px";
+    authorEl.style.color = "#475569";
+    authorEl.style.fontStyle = "italic";
+    authorEl.style.marginBottom = "24px";
+    element.appendChild(authorEl);
+
+    // 3. Tông nhạc (Key)
+    const metaEl = document.createElement("p");
+    metaEl.innerHTML = `Điệu thức / Tông nhạc (Key): <strong>${currentSongData.key || "Tự động"}</strong>`;
+    metaEl.style.fontSize = "11px";
+    metaEl.style.color = "#475569";
+    metaEl.style.marginBottom = "20px";
+    metaEl.style.borderBottom = "1px solid #e2e8f0";
+    metaEl.style.paddingBottom = "8px";
+    element.appendChild(metaEl);
+
+    // 4. Lời bài hát & Hợp âm (chữ đỏ, lọc sạch nhãn và dòng chỉ chứa hợp âm)
+    const cleanLyricsHTML = processLyricsForPDF(currentSongData.lyrics);
+
+    const lyricsPre = document.createElement("pre");
+    lyricsPre.innerHTML = cleanLyricsHTML;
+    lyricsPre.style.fontFamily = "'Plus Jakarta Sans', sans-serif";
+    lyricsPre.style.fontSize = "13px";
+    lyricsPre.style.whiteSpace = "pre-wrap";
+    lyricsPre.style.lineHeight = "1.8";
+    lyricsPre.style.color = "#1e293b";
+    element.appendChild(lyricsPre);
+
+    // 5. Footer
+    const footerEl = document.createElement("p");
+    footerEl.textContent = "Sáng tác tự động bởi Suno Music Composer AI - Tác phẩm bản quyền thuộc Người con tội lỗi";
+    footerEl.style.fontSize = "9px";
+    footerEl.style.color = "#94a3b8";
+    footerEl.style.textAlign = "center";
+    footerEl.style.marginTop = "30px";
+    footerEl.style.borderTop = "1px solid #f1f5f9";
+    footerEl.style.paddingTop = "10px";
+    element.appendChild(footerEl);
+
+    // Tạo hộp chứa ẩn tạm thời có kích thước bằng 0 để trình duyệt layout vẽ nhưng không hiện ra cho người dùng
+    const printContainer = document.createElement("div");
+    printContainer.style.position = "fixed";
+    printContainer.style.left = "0";
+    printContainer.style.top = "0";
+    printContainer.style.width = "0";
+    printContainer.style.height = "0";
+    printContainer.style.overflow = "hidden";
+    printContainer.style.zIndex = "-9999";
+    
+    element.style.width = "800px"; // Cố định chiều rộng tương đương độ phân giải in A4
+    printContainer.appendChild(element);
+    document.body.appendChild(printContainer);
+
+    // Cấu hình kết xuất PDF (in liên tục trên trang A4 dọc)
+    const opt = {
+        margin:       10,
+        filename:     `${currentSongData.title || "Bai-hat"}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+        document.body.removeChild(printContainer);
+    }).catch(err => {
+        console.error("Lỗi tải PDF:", err);
+        document.body.removeChild(printContainer);
+    });
+}
+
+// ==========================================
+// SUNO INTEGRATION LOGIC
+// ==========================================
+
+let sunoPollInterval = null;
+
+// Khởi tạo các sự kiện cho tích hợp Suno
+function initSunoIntegration() {
+    const modal = document.getElementById("sunoConfigModal");
+    const btnHeaderOpen = document.getElementById("headerSunoConfigBtn");
+    const btnInlineOpen = document.getElementById("btnOpenSunoConfigInline");
+    const btnClose = document.getElementById("btnCloseSunoConfig");
+    const btnSave = document.getElementById("btnSaveSunoConfig");
+    const btnImport = document.getElementById("btnImportSunoCurl");
+    const btnManualAdd = document.getElementById("btnManualAddAccount");
+    const btnGenMusic = document.getElementById("btnGenSunoMusic");
+    
+    // Cập nhật giao diện ban đầu
+    updateSunoUIState();
+    
+    // Tải cấu hình Model Version từ localStorage
+    const savedModelVersion = localStorage.getItem("suno_model_version") || "chirp-fenix";
+    const modelSelect = document.getElementById("cfgModelVersion");
+    if (modelSelect) modelSelect.value = savedModelVersion;
+    
+    // Mở modal cấu hình
+    const openModal = () => {
+        document.getElementById("sunoCurlInput").value = "";
+        modal.classList.add("active");
+        renderSunoAccounts();
+    };
+    
+    if (btnHeaderOpen) btnHeaderOpen.addEventListener("click", openModal);
+    if (btnInlineOpen) btnInlineOpen.addEventListener("click", openModal);
+    
+    // Đóng modal
+    const closeModal = () => modal.classList.remove("active");
+    if (btnClose) btnClose.addEventListener("click", closeModal);
+    if (btnSave) btnSave.addEventListener("click", () => {
+        const mvSelect = document.getElementById("cfgModelVersion");
+        if (mvSelect) {
+            localStorage.setItem("suno_model_version", mvSelect.value);
+        }
+        closeModal();
+        updateSunoUIState();
+    });
+    
+    // Thêm tài khoản từ cURL
+    if (btnImport) btnImport.addEventListener("click", () => {
+        const curlText = document.getElementById("sunoCurlInput").value;
+        if (!curlText.trim()) {
+            alert("Vui lòng nhập lệnh cURL.");
+            return;
+        }
+        
+        const config = parseSunoCurl(curlText);
+        
+        if (config.authToken) {
+            addSunoAccount(config);
+            document.getElementById("sunoCurlInput").value = "";
+            renderSunoAccounts();
+            updateSunoUIState();
+            alert("Đã thêm tài khoản từ cURL thành công!");
+        } else {
+            alert("Không tìm thấy thông tin Authorization Bearer token trong lệnh cURL. Vui lòng kiểm tra lại lệnh cURL của bạn.");
+        }
+    });
+    
+    // Thêm tài khoản thủ công từ Form
+    if (btnManualAdd) btnManualAdd.addEventListener("click", () => {
+        const auth = document.getElementById("cfgAuthToken").value.trim();
+        const browserToken = document.getElementById("cfgBrowserToken").value.trim();
+        const deviceId = document.getElementById("cfgDeviceId").value.trim();
+        const userTier = document.getElementById("cfgUserTier").value.trim();
+        const sessionToken = document.getElementById("cfgSessionToken").value.trim();
+        const bodyToken = document.getElementById("cfgBodyToken").value.trim();
+        
+        if (!auth) {
+            alert("Vui lòng điền Authorization token!");
+            return;
+        }
+        
+        const config = {
+            authToken: auth,
+            browserToken: browserToken,
+            deviceId: deviceId,
+            userTier: userTier,
+            createSessionToken: sessionToken,
+            sunoToken: bodyToken
+        };
+        
+        addSunoAccount(config);
+        
+        // Reset manual form fields
+        document.getElementById("cfgAuthToken").value = "";
+        document.getElementById("cfgBrowserToken").value = "";
+        document.getElementById("cfgDeviceId").value = "";
+        document.getElementById("cfgUserTier").value = "";
+        document.getElementById("cfgSessionToken").value = "";
+        document.getElementById("cfgBodyToken").value = "";
+        
+        renderSunoAccounts();
+        updateSunoUIState();
+        alert("Đã thêm tài khoản thủ công thành công!");
+    });
+    
+    // Sáng tác nhạc trên Suno
+    if (btnGenMusic) btnGenMusic.addEventListener("click", generateSunoMusic);
+}
+
+// Phân tích cú pháp cURL từ Suno
+function parseSunoCurl(curlText) {
+    const config = {};
+    
+    // Tìm các header -H
+    const hRegex = /-H\s+(['"])([^'"]+)\1/gi;
+    let match;
+    while ((match = hRegex.exec(curlText)) !== null) {
+        const headerValue = match[2];
+        const colonIndex = headerValue.indexOf(':');
+        if (colonIndex > -1) {
+            const key = headerValue.substring(0, colonIndex).trim().toLowerCase();
+            const value = headerValue.substring(colonIndex + 1).trim();
+            if (key === 'authorization') {
+                config.authToken = value;
+            } else if (key === 'browser-token') {
+                config.browserToken = value;
+            } else if (key === 'device-id') {
+                config.deviceId = value;
+            }
+        }
+    }
+    
+    // Tìm phần body dữ liệu (bắt đầu tìm từ vị trí của --data để tránh lấy nhầm JSON trong header browser-token)
+    let startSearchIndex = 0;
+    const dataIndex = curlText.search(/--data(-raw|-binary)?/i);
+    if (dataIndex > -1) {
+        startSearchIndex = dataIndex;
+    }
+    const startBrace = curlText.indexOf('{', startSearchIndex);
+    const endBrace = curlText.lastIndexOf('}');
+    if (startBrace > -1 && endBrace > startBrace) {
+        const rawJson = curlText.substring(startBrace, endBrace + 1);
+        try {
+            let cleanedJson = rawJson.replace(/\\'/g, "'").replace(/\\"/g, '"');
+            // Thử parse JSON trực tiếp
+            try {
+                const parsedData = JSON.parse(rawJson);
+                if (parsedData.token) config.sunoToken = parsedData.token;
+                if (parsedData.metadata) {
+                    config.userTier = parsedData.metadata.user_tier;
+                    config.createSessionToken = parsedData.metadata.create_session_token;
+                }
+            } catch (e) {
+                // Parse JSON đã dọn dẹp dấu nháy
+                const parsedData = JSON.parse(cleanedJson);
+                if (parsedData.token) config.sunoToken = parsedData.token;
+                if (parsedData.metadata) {
+                    config.userTier = parsedData.metadata.user_tier;
+                    config.createSessionToken = parsedData.metadata.create_session_token;
+                }
+            }
+        } catch (e) {
+            console.error("Lỗi phân tích cú pháp body JSON cURL:", e);
+        }
+    }
+    
+    return config;
+}
+
+// Quản lý tài khoản trong LocalStorage
+function getSunoAccounts() {
+    try {
+        const val = localStorage.getItem("suno_accounts");
+        return val ? JSON.parse(val) : [];
+    } catch (e) {
+        console.error("Lỗi đọc danh sách tài khoản:", e);
+        return [];
+    }
+}
+
+function saveSunoAccounts(accounts) {
+    try {
+        localStorage.setItem("suno_accounts", JSON.stringify(accounts));
+    } catch (e) {
+        console.error("Lỗi ghi danh sách tài khoản:", e);
+    }
+}
+
+function addSunoAccount(config) {
+    let accounts = getSunoAccounts();
+    
+    // Giải mã JWT để lấy email và expiry
+    const jwtDecoded = decodeJWT(config.authToken);
+    let email = "Tài khoản Suno";
+    let exp = null;
+    
+    if (jwtDecoded) {
+        email = jwtDecoded["suno.com/claims/email"] || jwtDecoded["https://suno.ai/claims/email"] || jwtDecoded["suno/username"] || "Tài khoản Suno";
+        if (jwtDecoded.exp) {
+            exp = jwtDecoded.exp * 1000; // Đổi sang ms
+        }
+    }
+    
+    const newAcc = {
+        id: "acc_" + Date.now(),
+        email: email,
+        authToken: config.authToken,
+        browserToken: config.browserToken || "",
+        deviceId: config.deviceId || "",
+        userTier: config.userTier || "4497580c-f4eb-4f86-9f0e-960eb7c48d7d",
+        createSessionToken: config.createSessionToken || "3d8d709b-97f1-4867-acfb-a014c499b58d",
+        bodyToken: config.sunoToken || "",
+        expiry: exp,
+        addedAt: Date.now()
+    };
+    
+    // Tránh trùng lặp tài khoản cùng Email
+    if (email !== "Tài khoản Suno") {
+        accounts = accounts.filter(acc => acc.email !== email);
+    }
+    
+    accounts.push(newAcc);
+    saveSunoAccounts(accounts);
+}
+
+function deleteSunoAccount(id) {
+    if (!confirm("Bạn có chắc chắn muốn xóa tài khoản này khỏi danh sách?")) return;
+    
+    let accounts = getSunoAccounts();
+    accounts = accounts.filter(acc => acc.id !== id);
+    saveSunoAccounts(accounts);
+    
+    const currentIndex = parseInt(localStorage.getItem("suno_current_account_index") || "0", 10);
+    if (accounts.length > 0) {
+        localStorage.setItem("suno_current_account_index", currentIndex % accounts.length);
+    } else {
+        localStorage.setItem("suno_current_account_index", "0");
+    }
+    
+    renderSunoAccounts();
+    updateSunoUIState();
+}
+
+function decodeJWT(token) {
+    try {
+        const cleanToken = token.replace(/^bearer\s+/i, "").trim();
+        const parts = cleanToken.split('.');
+        if (parts.length < 2) return null;
+        
+        const base64Url = parts[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        console.error("Lỗi giải mã JWT token:", e);
+        return null;
+    }
+}
+
+// Render giao diện danh sách tài khoản
+function renderSunoAccounts() {
+    const listContainer = document.getElementById("sunoAccountsList");
+    const countSpan = document.getElementById("sunoAccountsCount");
+    
+    if (!listContainer) return;
+    
+    const accounts = getSunoAccounts();
+    const currentIndex = parseInt(localStorage.getItem("suno_current_account_index") || "0", 10);
+    
+    if (countSpan) {
+        countSpan.textContent = accounts.length + " tài khoản";
+    }
+    
+    if (accounts.length === 0) {
+        listContainer.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.8rem; border: 1px dashed var(--border-color); border-radius: 10px;">
+                Chưa có tài khoản nào được thêm. Vui lòng dán cURL ở trên để bắt đầu!
+            </div>
+        `;
+        return;
+    }
+    
+    listContainer.innerHTML = "";
+    
+    accounts.forEach((acc, idx) => {
+        const item = document.createElement("div");
+        const isActiveRotation = (idx === currentIndex % accounts.length);
+        item.className = "suno-account-item" + (isActiveRotation ? " active-rotation" : "");
+        
+        const isExpired = acc.expiry && (Date.now() > acc.expiry);
+        const statusClass = isExpired ? "account-status-expired" : "account-status-active";
+        const statusText = isExpired ? "Hết hạn" : "Đang chạy";
+        
+        let expiryText = "Không xác định";
+        if (acc.expiry) {
+            expiryText = new Date(acc.expiry).toLocaleString('vi-VN', {
+                month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+        }
+        
+        item.innerHTML = `
+            <div class="suno-account-details">
+                <div class="suno-account-email">
+                    <i data-lucide="mail" style="width: 14px; height: 14px; color: var(--text-secondary);"></i>
+                    <span>${escapeHTML(acc.email)}</span>
+                    ${isActiveRotation ? `<span class="suno-account-badge">Active</span>` : ''}
+                </div>
+                <div class="suno-account-expiry">Hạn: ${expiryText} | <span class="suno-account-status ${statusClass}">${statusText}</span></div>
+            </div>
+            <div class="suno-account-actions">
+                <button type="button" class="suno-account-btn-delete suno-clip-btn" data-id="${acc.id}" style="padding: 4px 8px; border-color: rgba(239, 68, 68, 0.2); color: var(--color-danger); background: rgba(239, 68, 68, 0.05);">
+                    <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i> Xóa
+                </button>
+            </div>
+        `;
+        
+        listContainer.appendChild(item);
+    });
+    
+    listContainer.querySelectorAll(".suno-account-btn-delete").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute("data-id");
+            deleteSunoAccount(id);
+        });
+    });
+    
+    lucide.createIcons();
+}
+
+// Cập nhật giao diện cảnh báo cấu hình Suno
+function updateSunoUIState() {
+    const accounts = getSunoAccounts();
+    const warning = document.getElementById("sunoConfigWarning");
+    const controls = document.getElementById("sunoGenControls");
+    
+    if (accounts.length > 0) {
+        if (warning) warning.style.display = "none";
+        if (controls) controls.style.display = "block";
+    } else {
+        if (warning) warning.style.display = "block";
+        if (controls) controls.style.display = "none";
+    }
+}
+
+// Sáng tác nhạc trên Suno (Xoay vòng và Thử lại tự động)
+async function generateSunoMusic() {
+    const accounts = getSunoAccounts();
+    if (accounts.length === 0) {
+        alert("Vui lòng cấu hình ít nhất 1 tài khoản Suno trong phần Cấu hình trước!");
+        return;
+    }
+    
+    let startIndex = parseInt(localStorage.getItem("suno_current_account_index") || "0", 10);
+    startIndex = startIndex % accounts.length;
+    
+    const controls = document.getElementById("sunoGenControls");
+    const loading = document.getElementById("sunoGenLoading");
+    const loadingStatus = document.getElementById("sunoLoadingStatus");
+    const loadingSubtext = document.getElementById("sunoLoadingSubtext");
+    
+    controls.style.display = "none";
+    loading.style.display = "flex";
+    
+    async function tryGenerate(attemptCount, currentIdx) {
+        const idx = currentIdx % accounts.length;
+        const account = accounts[idx];
+        
+        // Lưu index tiếp theo
+        localStorage.setItem("suno_current_account_index", (idx + 1) % accounts.length);
+        
+        loadingStatus.textContent = `Đang gửi yêu cầu tạo nhạc lên Suno...`;
+        loadingSubtext.textContent = `Sử dụng tài khoản: ${account.email} (${attemptCount + 1}/${accounts.length})`;
+        
+        try {
+            const modelVersion = localStorage.getItem("suno_model_version") || "chirp-fenix";
+            const chkInstrumental = document.getElementById("chkSunoInstrumental");
+            const makeInstrumental = chkInstrumental ? chkInstrumental.checked : false;
+            
+            const response = await fetch("/api/suno/generate", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    auth_token: account.authToken,
+                    browser_token: account.browserToken,
+                    device_id: account.deviceId,
+                    suno_token: account.bodyToken || "",
+                    song_id: currentSongData.id || "",
+                    prompt: currentSongData.lyrics || "",
+                    tags: currentSongData.style || "",
+                    title: currentSongData.title || "Bài nhạc AI",
+                    model_version: modelVersion,
+                    make_instrumental: makeInstrumental,
+                    account_email: account.email
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Lỗi phản hồi ${response.status}`);
+            }
+            
+            let clips = [];
+            if (Array.isArray(data)) {
+                clips = data;
+            } else if (data && Array.isArray(data.clips)) {
+                clips = data.clips;
+            }
+            
+            if (clips.length === 0) {
+                throw new Error("Không nhận được clips nhạc nào từ Suno.");
+            }
+            
+            const clipIds = clips.map(c => c.id).filter(id => !!id);
+            
+            currentSongData.sunoClips = clips.map(c => ({
+                id: c.id,
+                title: c.title,
+                audioUrl: c.audio_url || "",
+                videoUrl: c.video_url || "",
+                imageUrl: c.image_url || "",
+                status: c.status || "queued",
+                prompt: c.metadata ? c.metadata.prompt : "",
+                createdAt: new Date(),
+                accountEmail: account.email
+            }));
+            
+            renderSunoClips(currentSongData.sunoClips);
+            
+            loadingStatus.textContent = "Đang xếp hàng tạo nhạc trên Suno...";
+            loadingSubtext.textContent = "Nhạc sĩ AI đang kết xuất giai điệu. Có hai phiên bản đang được xử lý.";
+            
+            pollSunoStatus(clipIds, currentSongData.id, account);
+            
+        } catch (err) {
+            console.warn(`Lỗi tạo nhạc với tài khoản ${account.email}:`, err.message);
+            
+            if (attemptCount + 1 < accounts.length) {
+                await tryGenerate(attemptCount + 1, idx + 1);
+            } else {
+                alert(`Tất cả tài khoản Suno đều không thể tạo nhạc. Lỗi cuối cùng: ${err.message}`);
+                controls.style.display = "block";
+                loading.style.display = "none";
+            }
+        }
+    }
+    
+    await tryGenerate(0, startIndex);
+}
+
+// Vòng lặp kiểm tra tiến độ của Suno bài hát (Polling)
+function pollSunoStatus(clipIds, songId, account) {
+    if (sunoPollInterval) {
+        clearInterval(sunoPollInterval);
+    }
+    
+    const authToken = account.authToken;
+    const browserToken = account.browserToken;
+    const deviceId = account.deviceId;
+    
+    const controls = document.getElementById("sunoGenControls");
+    const loading = document.getElementById("sunoGenLoading");
+    const loadingStatus = document.getElementById("sunoLoadingStatus");
+    const loadingSubtext = document.getElementById("sunoLoadingSubtext");
+    
+    let dots = 0;
+    
+    sunoPollInterval = setInterval(async () => {
+        dots = (dots + 1) % 4;
+        const dotStr = ".".repeat(dots);
+        
+        try {
+            const response = await fetch("/api/suno/feed", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    auth_token: authToken,
+                    browser_token: browserToken,
+                    device_id: deviceId,
+                    clip_ids: clipIds,
+                    song_id: songId || "",
+                    account_email: account.email
+                })
+            });
+            
+            if (!response.ok) return; // Tiếp tục thử lại ở lần sau
+            
+            const data = await response.json();
+            
+            let clips = [];
+            if (Array.isArray(data)) {
+                clips = data;
+            } else if (data && Array.isArray(data.clips)) {
+                clips = data.clips;
+            }
+            
+            if (clips.length === 0) return;
+            
+            // Format clips cho Client
+            const formattedClips = clips.map(c => ({
+                id: c.id,
+                title: c.title,
+                audioUrl: c.audio_url || "",
+                videoUrl: c.video_url || "",
+                imageUrl: c.image_url || "",
+                status: c.status || "queued",
+                prompt: c.metadata ? c.metadata.prompt : "",
+                createdAt: new Date(c.created_at),
+                accountEmail: account.email
+            }));
+            
+            currentSongData.sunoClips = formattedClips;
+            renderSunoClips(formattedClips);
+            
+            // Kiểm tra trạng thái hoàn tất
+            const allFinished = formattedClips.every(c => c.status === "complete" || c.status === "failed");
+            const anyStreaming = formattedClips.some(c => c.status === "streaming");
+            
+            if (anyStreaming) {
+                loadingStatus.textContent = "Đang kết xuất và phát trực tiếp" + dotStr;
+                loadingSubtext.textContent = "Bạn đã có thể nghe thử trước phần nhạc đang được tải.";
+            } else {
+                loadingStatus.textContent = "Đang xử lý giai điệu" + dotStr;
+            }
+            
+            if (allFinished) {
+                clearInterval(sunoPollInterval);
+                sunoPollInterval = null;
+                
+                loading.style.display = "none";
+                controls.style.display = "block";
+                
+                // Cập nhật lại list lịch sử nếu đang xem
+                updateHistoryCount();
+            }
+            
+        } catch (e) {
+            console.error("Lỗi polling Suno status:", e);
+        }
+    }, 5000); // Polling mỗi 5 giây
+}
+
+// Hiển thị danh sách các clips nhạc Suno đã tạo
+function renderSunoClips(clips) {
+    const wrapper = document.getElementById("sunoGeneratedClips");
+    const container = document.getElementById("sunoClipsList");
+    
+    if (!clips || clips.length === 0) {
+        wrapper.style.display = "none";
+        container.innerHTML = "";
+        return;
+    }
+    
+    wrapper.style.display = "block";
+    container.innerHTML = "";
+    
+    clips.forEach(clip => {
+        const item = document.createElement("div");
+        item.className = "suno-clip-item";
+        
+        let statusText = "Đang chờ";
+        if (clip.status === "complete") statusText = "Hoàn thành";
+        if (clip.status === "streaming") statusText = "Đang tải";
+        if (clip.status === "failed") statusText = "Thất bại";
+        
+        item.innerHTML = `
+            <div class="suno-clip-cover-wrapper">
+                ${clip.imageUrl ? `<img src="${clip.imageUrl}" class="suno-clip-cover" alt="Art">` : `<i data-lucide="music" style="width: 24px; height: 24px; color: var(--text-muted);"></i>`}
+            </div>
+            <div class="suno-clip-info">
+                <div class="suno-clip-title" title="${escapeHTML(clip.title || 'Bài nhạc Suno')}">${escapeHTML(clip.title || 'Bài nhạc Suno')}</div>
+                ${clip.accountEmail ? `<div class="suno-clip-account" style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 2px;"><i data-lucide="user" style="width: 11px; height: 11px;"></i> ${escapeHTML(clip.accountEmail)}</div>` : ''}
+                <div class="suno-clip-status status-${clip.status || 'queued'}" style="margin-top: 4px;">${statusText}</div>
+                
+                ${(clip.status === 'complete' || clip.status === 'streaming') && clip.audioUrl ? `
+                    <div class="suno-clip-player-wrapper">
+                        <audio src="${clip.audioUrl}" controls class="suno-clip-audio"></audio>
+                        <div class="suno-clip-actions">
+                            <a href="/api/suno/download?url=${encodeURIComponent(clip.audioUrl)}&name=${encodeURIComponent((currentSongData.title || clip.title || 'music').trim())}" target="_blank" class="suno-clip-btn suno-clip-btn-primary">
+                                <i data-lucide="download"></i> Tải MP3
+                            </a>
+                            ${clip.videoUrl ? `
+                                <a href="${clip.videoUrl}" target="_blank" class="suno-clip-btn">
+                                    <i data-lucide="external-link"></i> Xem Video
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        container.appendChild(item);
+    });
+    
+    lucide.createIcons();
+}
+
+// Kiểm tra trạng thái đăng nhập hệ thống
+async function checkAuthStatus() {
+    try {
+        const res = await fetch("/api/auth-status");
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        const logoutBtn = document.getElementById("headerLogoutBtn");
+        if (data.auth_enabled && logoutBtn) {
+            logoutBtn.style.display = "flex";
+            logoutBtn.addEventListener("click", async () => {
+                if (confirm("Bạn có chắc chắn muốn đăng xuất không?")) {
+                    try {
+                        const logoutRes = await fetch("/api/logout", { method: "POST" });
+                        if (logoutRes.ok) {
+                            window.location.reload();
+                        }
+                    } catch (e) {
+                        console.error("Lỗi đăng xuất:", e);
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Lỗi kiểm tra cấu hình auth:", e);
+    }
+}

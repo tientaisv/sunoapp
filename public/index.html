@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suno Music Composer - Sáng Tác Nhạc AI Chuyên Nghiệp</title>
+    <meta name="description" content="Ứng dụng sáng tác nhạc chuyên nghiệp cho Suno AI, tối ưu hóa nhạc lý, cảm âm tiếng Việt, tích hợp hợp âm và phối khí chuyên sâu.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- html2pdf.js for client-side PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- abcjs for vector sheet music rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.2.2/dist/abcjs-basic-min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glow-bg-1"></div>
+    <div class="glow-bg-2"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <i data-lucide="music-4"></i>
+                </div>
+                <div>
+                    <h1>Suno Music Composer</h1>
+                    <p class="subtitle">Sáng tác nhạc chuyên nghiệp · Phối khí thông minh</p>
+                </div>
+            </div>
+            <div class="header-badges" style="display: flex; gap: 8px; align-items: center;">
+                <span class="badge badge-success"><i data-lucide="zap"></i> Golang Backend</span>
+                <span class="badge badge-primary"><i data-lucide="cpu"></i> Gemini AI Engine</span>
+                <button type="button" class="btn-action btn-sm" id="headerSunoConfigBtn" style="background: rgba(251, 191, 36, 0.12); color: var(--color-warning); border-color: rgba(251, 191, 36, 0.25); height: 26px; padding: 0 10px; font-size: 0.75rem; display: flex; align-items: center; gap: 4px; border-radius: 6px;"><i data-lucide="settings" style="width: 13px; height: 13px;"></i> Cấu hình Suno</button>
+                <button type="button" class="btn-action btn-sm btn-secondary" id="headerLogoutBtn" style="background: rgba(239, 68, 68, 0.12); color: var(--color-danger); border-color: rgba(239, 68, 68, 0.25); height: 26px; padding: 0 10px; font-size: 0.75rem; display: none; align-items: center; gap: 4px; border-radius: 6px;"><i data-lucide="log-out" style="width: 13px; height: 13px;"></i> Đăng xuất</button>
+            </div>
+        </header>
+
+        <main class="app-content">
+            <!-- Left Panel: Configuration Form -->
+            <section class="config-panel">
+                <!-- 1. Nhập Ý tưởng & Màu sắc -->
+                <div class="section-card">
+                    <h2 class="section-title"><i data-lucide="sparkles"></i> 1. Ý tưởng & Màu sắc cảm xúc</h2>
+                    
+                    <div class="form-group">
+                        <label for="topic">Nội dung ý tưởng chủ đề bài hát:</label>
+                        <textarea id="topic" placeholder="Nhập ý tưởng của bạn (ví dụ: Một buổi chiều mưa rơi bên hiên nhà cũ, cảm giác cô đơn trống trải nhớ về người yêu cũ... Hoặc một bài thánh ca tạ ơn về tình thương bao la của Thiên Chúa...)"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Màu sắc / Không khí âm nhạc chủ đạo:</label>
+                        <div class="color-options">
+                            <button type="button" class="color-btn active" data-color="blue" style="--color-theme: #3b82f6;">
+                                <span class="color-dot"></span> Xanh Dương (U sầu)
+                            </button>
+                            <button type="button" class="color-btn" data-color="gold" style="--color-theme: #fbbf24;">
+                                <span class="color-dot"></span> Vàng Kim (Thánh thiêng)
+                            </button>
+                            <button type="button" class="color-btn" data-color="red" style="--color-theme: #ef4444;">
+                                <span class="color-dot"></span> Đỏ (Nồng nàn)
+                            </button>
+                            <button type="button" class="color-btn" data-color="purple" style="--color-theme: #a855f7;">
+                                <span class="color-dot"></span> Tím (Tâm tình)
+                            </button>
+                            <button type="button" class="color-btn" data-color="green" style="--color-theme: #10b981;">
+                                <span class="color-dot"></span> Xanh Lá (Bình an)
+                            </button>
+                        </div>
+                        <div class="custom-color-area">
+                            <div class="color-picker-wrapper">
+                                <input type="color" id="customColorPicker" value="#3b82f6" title="Chọn màu giao diện tùy ý">
+                                <span class="color-picker-label">Màu sắc tự chọn:</span>
+                            </div>
+                            <input type="text" id="customColorName" placeholder="Tự nhập màu cảm xúc (Ví dụ: Xám lạnh u sầu, Vàng cam rực rỡ...)" class="input-control">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Cấu hình Chi tiết (Giống hình mẫu) -->
+                <div class="section-card">
+                    <h2 class="section-title"><i data-lucide="sliders"></i> 2. Bộ lọc & Phong cách âm nhạc</h2>
+
+                    <!-- Mức độ chất liệu Công giáo -->
+                    <div class="filter-group">
+                        <label class="group-label">Mức độ chất liệu Công giáo trong lời</label>
+                        <div class="btn-group" id="catholicDegree">
+                            <button type="button" class="btn-item active" data-val="Đậm chất Công giáo (Thánh ca)">Đậm chất Công giáo</button>
+                            <button type="button" class="btn-item" data-val="Thoáng nhẹ (Ý niệm đức tin nhẹ nhàng)">Thoáng nhẹ (ít)</button>
+                            <button type="button" class="btn-item" data-val="Đời thường (Không tôn giáo, tình ca, tự sự)">Đời thường (Không tôn giáo)</button>
+                        </div>
+                    </div>
+
+                    <!-- Layout 2 cột cho các thuộc tính nhỏ -->
+                    <div class="grid-2-col">
+                        <!-- Số lượng lời -->
+                        <div class="filter-group">
+                            <label class="group-label">Số lượng lời (Verse)</label>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div class="btn-group" id="verses">
+                                    <button type="button" class="btn-item active" data-val="2">2 Lời</button>
+                                    <button type="button" class="btn-item" data-val="3">3 Lời</button>
+                                    <button type="button" class="btn-item" data-val="4">4 Lời</button>
+                                </div>
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="repeatVerse" checked>
+                                    <span class="checkmark"></span> Lặp lại lời / điệp khúc (x2)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Cao độ điệp khúc -->
+                        <div class="filter-group">
+                            <label class="group-label">Cao độ Điệp khúc (so với Verse)</label>
+                            <div class="btn-group" id="chorusPitch">
+                                <button type="button" class="btn-item active" data-val="Cao (High)">Cao (High)</button>
+                                <button type="button" class="btn-item" data-val="Vừa (Mid)">Vừa (Mid)</button>
+                                <button type="button" class="btn-item" data-val="Trầm (Low)">Trầm (Low)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tông nhạc Key & Tốc độ Tempo -->
+                    <div class="grid-2-col">
+                        <!-- Tông nhạc (Key) -->
+                        <div class="filter-group">
+                            <label class="group-label">Tông nhạc (Key) (Nhạc lý)</label>
+                            <select id="musicKey" class="select-control">
+                                <option value="">Tự động chọn tông phù hợp</option>
+                                <option value="C Major">C Major (Đô trưởng - Trong sáng, Vui tươi)</option>
+                                <option value="A Minor">A Minor (La thứ - Buồn, Tự sự)</option>
+                                <option value="G Major">G Major (Sol trưởng - Bình yên, Ấm áp)</option>
+                                <option value="E Minor">E Minor (Mi thứ - Sâu lắng, Khắc khoải)</option>
+                                <option value="F Major">F Major (Fa trưởng - Trang trọng, Thành kính)</option>
+                                <option value="D Minor">D Minor (Rê thứ - U sầu, Thành khẩn)</option>
+                                <option value="B Minor">B Minor (Si thứ - Đau thương, Da diết)</option>
+                                <option value="D Major">D Major (Rê trưởng - Hùng tráng, Vinh quang)</option>
+                                <option value="A Major">A Major (La trưởng - Tươi sáng, Hy vọng)</option>
+                            </select>
+                        </div>
+
+                        <!-- Tốc độ (Tempo) -->
+                        <div class="filter-group">
+                            <label class="group-label">Tốc độ (Tempo)</label>
+                            <div class="btn-group" id="tempo">
+                                <button type="button" class="btn-item" data-val="Chậm (Slow)">Chậm</button>
+                                <button type="button" class="btn-item active" data-val="Vừa (Moderate)">Vừa</button>
+                                <button type="button" class="btn-item" data-val="Nhanh (Fast)">Nhanh</button>
+                                <button type="button" class="btn-item" data-val="Sôi động (Upbeat)">Sôi động</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thể loại nhạc (Tùy chọn) -->
+                    <div class="filter-group">
+                        <label class="group-label">Thể loại nhạc (Tùy chọn nhiều)</label>
+                        <div class="chips-container" id="genre">
+                            <span class="chip-item active" data-val="Thánh ca Truyền thống">Thánh ca Truyền thống</span>
+                            <span class="chip-item" data-val="Thánh ca Đương đại">Thánh ca Đương đại</span>
+                            <span class="chip-item" data-val="Gregorian Chant">Bình ca Gregorian</span>
+                            <span class="chip-item" data-val="Gospel">Gospel (Tin Lành)</span>
+                            <span class="chip-item" data-val="Hợp xướng (Choral Choir)">Hợp xướng (Choral Choir)</span>
+                            <span class="chip-item" data-val="Thính phòng (Chamber)">Thính phòng (Chamber)</span>
+                            <span class="chip-item" data-val="Symphonic Orchestral">Symphonic Orchestral</span>
+                            <span class="chip-item" data-val="Hymn (Thánh ca cổ điển)">Hymn (Thánh cổ điển)</span>
+                            
+                            <span class="chip-item" data-val="V-Pop">V-Pop</span>
+                            <span class="chip-item" data-val="K-Pop">K-Pop</span>
+                            <span class="chip-item" data-val="Pop Ballad">Pop Ballad</span>
+                            <span class="chip-item" data-val="Acoustic">Acoustic</span>
+                            <span class="chip-item" data-val="Indie Pop">Indie Pop</span>
+                            <span class="chip-item" data-val="City Pop">City Pop</span>
+                            <span class="chip-item" data-val="Country (Nhạc đồng quê)">Country (Đồng quê)</span>
+                            
+                            <span class="chip-item" data-val="Jazz">Jazz</span>
+                            <span class="chip-item" data-val="Soul">Soul</span>
+                            <span class="chip-item" data-val="Blues">Blues</span>
+                            <span class="chip-item" data-val="R&B Soul">R&B Soul</span>
+                            
+                            <span class="chip-item" data-val="EDM">EDM</span>
+                            <span class="chip-item" data-val="Deep House">Deep House</span>
+                            <span class="chip-item" data-val="Tropical House">Tropical House</span>
+                            <span class="chip-item" data-val="Future Bass">Future Bass</span>
+                            <span class="chip-item" data-val="Synthwave">Synthwave</span>
+                            <span class="chip-item" data-val="Chillout Ambient">Chillout Ambient</span>
+                            <span class="chip-item" data-val="Lo-fi">Lo-fi</span>
+                            
+                            <span class="chip-item" data-val="HipHop">HipHop</span>
+                            <span class="chip-item" data-val="Rap">Rap</span>
+                            
+                            <span class="chip-item" data-val="Soft Rock">Soft Rock</span>
+                            <span class="chip-item" data-val="Alternative Rock">Alternative Rock</span>
+                            <span class="chip-item" data-val="Symphonic Metal">Symphonic Metal</span>
+                            
+                            <span class="chip-item" data-val="Dân ca Việt Nam">Dân ca Việt Nam</span>
+                            <span class="chip-item" data-val="World Music">World Music</span>
+                        </div>
+                    </div>
+
+                    <!-- Giọng hát (Voice Style) -->
+                    <div class="filter-group">
+                        <label class="group-label">Giọng hát (Voice Style)</label>
+                        <div class="chips-container" id="voiceStyle">
+                            <span class="chip-item active" data-val="Nam (Male)">Nam (Male)</span>
+                            <span class="chip-item" data-val="Nữ (Female)">Nữ (Female)</span>
+                            <span class="chip-item" data-val="Nam trẻ (Young Male)">Nam trẻ (Young Male)</span>
+                            <span class="chip-item" data-val="Nữ trẻ (Young Female)">Nữ trẻ (Young Female)</span>
+                            <span class="chip-item" data-val="Nam lão (Elderly Male)">Nam lão (Elderly Male)</span>
+                            <span class="chip-item" data-val="Nữ lão (Elderly Female)">Nữ lão (Elderly Female)</span>
+                            <span class="chip-item" data-val="Thiếu nhi (Child)">Thiếu nhi (Child)</span>
+                            <span class="chip-item" data-val="Hợp xướng (Choir)">Hợp xướng (Choir)</span>
+                            <span class="chip-item" data-val="Soprano Opera">Soprano Opera</span>
+                            <span class="chip-item" data-val="Hợp xướng Gospel">Hợp xướng Gospel</span>
+                            <span class="chip-item" data-val="Nhẹ nhàng (Soft)">Nhẹ nhàng (Soft)</span>
+                            <span class="chip-item" data-val="Mạnh mẽ (Powerful)">Mạnh mẽ (Powerful)</span>
+                            <span class="chip-item" data-val="Trầm ấm (Deep)">Trầm ấm (Deep)</span>
+                            <span class="chip-item" data-val="Truyền cảm (Soulful)">Truyền cảm (Soulful)</span>
+                            <span class="chip-item" data-val="Thì thầm (Whispering)">Thì thầm (Whispering)</span>
+                        </div>
+                    </div>
+
+                    <!-- Tâm trạng & Tone giọng -->
+                    <div class="filter-group">
+                        <label class="group-label">Tâm trạng & Tone giọng (Tùy chọn)</label>
+                        <div class="chips-container" id="mood">
+                            <span class="chip-item" data-val="Tự sự (Narrative)">Tự sự (Narrative)</span>
+                            <span class="chip-item active" data-val="Tâm tình (Sentimental)">Tâm tình (Sentimental)</span>
+                            <span class="chip-item" data-val="Buồn (Sad)">Buồn (Sad)</span>
+                            <span class="chip-item" data-val="Vui tươi (Joyful)">Vui tươi (Joyful)</span>
+                            <span class="chip-item" data-val="Hùng tráng (Epic)">Hùng tráng (Epic)</span>
+                            <span class="chip-item" data-val="Sâu lắng (Reflective)">Sâu lắng (Reflective)</span>
+                            <span class="chip-item" data-val="Cầu nguyện (Prayer)">Cầu nguyện (Prayer)</span>
+                            <span class="chip-item" data-val="Sám hối (Repentant)">Sám hối (Repentant)</span>
+                            <span class="chip-item" data-val="Bình an (Peaceful)">Bình an (Peaceful)</span>
+                            <span class="chip-item" data-val="Ca ngợi (Praise)">Ca ngợi (Praise)</span>
+                            <span class="chip-item" data-val="Sôi động (Energetic)">Sôi động (Energetic)</span>
+                            <span class="chip-item" data-val="Hiện đại (Modern)">Hiện đại (Modern)</span>
+                        </div>
+                    </div>
+
+                    <!-- Phối bè & Bè giọng -->
+                    <div class="filter-group-harmony" style="border: 1px solid rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 12px; margin-bottom: 16px; background: rgba(255, 255, 255, 0.01);">
+                        <label class="group-label" style="display: flex; align-items: center; gap: 6px; color: var(--color-warning); font-size: 0.9rem; font-weight: 700; margin-bottom: 12px;">
+                            <i data-lucide="users"></i> Phối bè & Bè giọng
+                        </label>
+                        
+                        <div class="grid-2-col" style="gap: 12px; margin-bottom: 12px;">
+                            <div class="filter-group" style="margin-bottom: 0;">
+                                <label class="group-label" style="font-size: 0.8rem; opacity: 0.8;">Số bè phụ</label>
+                                <div class="btn-group" id="vocalHarmony">
+                                    <button type="button" class="btn-item active" data-val="Không bè">Không bè</button>
+                                    <button type="button" class="btn-item" data-val="1 bè phụ">1 bè phụ</button>
+                                    <button type="button" class="btn-item" data-val="2 bè phụ">2 bè phụ</button>
+                                    <button type="button" class="btn-item" data-val="Dàn bè/Hợp xướng">Dàn bè</button>
+                                </div>
+                            </div>
+
+                            <div class="filter-group" style="margin-bottom: 0;">
+                                <label class="group-label" style="font-size: 0.8rem; opacity: 0.8;">Kỹ thuật bè</label>
+                                <div class="btn-group" id="vocalTechnique">
+                                    <button type="button" class="btn-item active" data-val="Bè quãng (Interval)">Bè quãng</button>
+                                    <button type="button" class="btn-item" data-val="Bè đuổi (Call & Response)">Bè đuổi</button>
+                                    <button type="button" class="btn-item" data-val="Bè phức điệu (Polyphonic)">Phức điệu</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-group" style="margin-bottom: 0;">
+                            <label class="group-label" style="font-size: 0.8rem; opacity: 0.8;">Phân bổ bè</label>
+                            <div class="btn-group" id="vocalPlacement">
+                                <button type="button" class="btn-item active" data-val="Chỉ bè điệp khúc">Chỉ bè Điệp khúc</button>
+                                <button type="button" class="btn-item" data-val="Bè suốt bài">Bè suốt bài</button>
+                                <button type="button" class="btn-item" data-val="Bè vọng cuối câu">Vọng cuối câu</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nhạc cụ ưu tiên -->
+                    <div class="filter-group">
+                        <label class="group-label">Nhạc cụ ưu tiên (Tùy chọn nhiều)</label>
+                        <div class="chips-container multi-select" id="instruments">
+                            <span class="chip-item" data-val="Piano">Piano</span>
+                            <span class="chip-item" data-val="Organ">Organ</span>
+                            <span class="chip-item" data-val="Acoustic Guitar">Acoustic Guitar</span>
+                            <span class="chip-item" data-val="Electric Guitar">Electric Guitar</span>
+                            <span class="chip-item" data-val="Bass">Bass</span>
+                            <span class="chip-item" data-val="Strings">Strings</span>
+                            <span class="chip-item" data-val="Violin">Violin</span>
+                            <span class="chip-item" data-val="Cello">Cello</span>
+                            <span class="chip-item" data-val="Choir">Choir</span>
+                            <span class="chip-item" data-val="Synthesizer">Synthesizer</span>
+                            <span class="chip-item" data-val="Drums">Drums</span>
+                            <span class="chip-item" data-val="Percussion">Percussion</span>
+                            <span class="chip-item" data-val="Flute">Flute</span>
+                            <span class="chip-item" data-val="Saxophone">Saxophone</span>
+                            <span class="chip-item" data-val="Trumpet">Trumpet</span>
+                            <span class="chip-item" data-val="Harp">Harp</span>
+                            <span class="chip-item" data-val="Bells">Bells</span>
+                            <span class="chip-item" data-val="Beatbox">Beatbox</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gợi ý nhanh chủ đề -->
+                <div class="quick-suggestions">
+                    <span class="suggest-label">Gợi ý nhanh chủ đề:</span>
+                    <div class="suggest-list">
+                        <button type="button" class="suggest-chip">Bài hát về Lòng Thương Xót Chúa</button>
+                        <button type="button" class="suggest-chip">Thánh ca tạ ơn sau Thánh Lễ</button>
+                        <button type="button" class="suggest-chip">Bài hát cho Mùa Vọng</button>
+                        <button type="button" class="suggest-chip">Thánh ca về Đức Mẹ La Vang</button>
+                        <button type="button" class="suggest-chip">Một bài hát dâng hiến cuộc đời</button>
+                    </div>
+                </div>
+
+                <!-- Nút Submit -->
+                <button type="button" class="btn-submit" id="composeBtn">
+                    <i data-lucide="wand-2"></i> Tạo bài hát
+                </button>
+            </section>
+
+            <!-- Right Panel: Results & Suno Copier & History -->
+            <section class="result-panel">
+                <!-- Tab Headers -->
+                <div class="tabs-header">
+                    <button type="button" class="tab-btn active" data-tab="current-song">
+                        <i data-lucide="music-2"></i> Tác phẩm hiện tại
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="history-library" id="historyTabBtn">
+                        <i data-lucide="folder-heart"></i> Thư viện lịch sử (<span id="historyCount">0</span>)
+                    </button>
+                </div>
+
+                <!-- Tab 1: Current Song -->
+                <div class="tab-content active" id="tab-current-song">
+                    <!-- Trạng thái chờ -->
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-icon">
+                            <i data-lucide="music"></i>
+                        </div>
+                        <h3>Sẵn sàng sáng tác</h3>
+                        <p>Điền ý tưởng và chọn phong cách âm nhạc ở bảng bên trái, sau đó nhấn nút "Tạo bài hát" để bắt đầu sáng tạo nghệ thuật.</p>
+                    </div>
+
+                    <!-- Trạng thái Loading -->
+                    <div class="loading-state" id="loadingState" style="display: none;">
+                        <div class="music-wave">
+                            <span></span><span></span><span></span><span></span><span></span>
+                        </div>
+                        <h3>Đang sáng tác bài hát...</h3>
+                        <p>Nhạc sĩ AI đang phân tích nhạc lý, soạn lời giàu hình ảnh thần học, chèn hợp âm và tối ưu hóa nhịp thở cho bài hát. Vui lòng chờ trong giây lát.</p>
+                    </div>
+
+                    <!-- Trạng thái Kết quả -->
+                    <div class="result-container" id="resultContainer" style="display: none;">
+                        <!-- Tiêu đề tác phẩm hiển thị -->
+                        <div class="title-display-area">
+                            <h3 class="res-title-display" id="resTitleDisplay">Mưa Ký Ức</h3>
+                            <input type="text" id="titleInput" class="input-control title-edit-input" style="display:none; font-size: 1.25rem; font-weight: 700; width: 100%;" placeholder="Nhập tên bài hát...">
+                        </div>
+
+                        <div class="result-header">
+                            <div class="result-meta">
+                                <span class="meta-item"><i data-lucide="key-round"></i> Tông nhạc: <strong id="resKey">B Minor</strong></span>
+                                <span class="meta-item" id="resSongIdWrapper" style="display:none;"><i data-lucide="hash"></i> ID: <strong id="resSongId"></strong></span>
+                            </div>
+                            <div class="result-actions-top">
+                                <label class="toggle-chords-label">
+                                    <input type="checkbox" id="chordToggle" checked>
+                                    <span class="toggle-slider"></span>
+                                    Hiện hợp âm
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Editor/Viewer Header Actions -->
+                        <div class="editor-toggle-bar">
+                            <button type="button" class="btn-action" id="btnEditSong"><i data-lucide="edit-3"></i> Chỉnh sửa trực tiếp</button>
+                            <button type="button" class="btn-action btn-success" id="btnSaveSong" style="display:none;"><i data-lucide="save"></i> Lưu chỉnh sửa</button>
+                            <button type="button" class="btn-action btn-secondary" id="btnCancelEdit" style="display:none;"><i data-lucide="x"></i> Hủy</button>
+                            <button type="button" class="btn-action btn-secondary" id="btnRemixSong"><i data-lucide="shuffle"></i> Phối lại nhạc (Giữ lời)</button>
+                            <button type="button" class="btn-action btn-secondary" id="btnRewriteSong"><i data-lucide="type"></i> Viết lại lời mới</button>
+                            <button type="button" class="btn-action btn-primary" id="btnDownloadPDF" style="margin-left: auto;"><i data-lucide="file-text"></i> Tải PDF lời & hợp âm</button>
+                        </div>
+
+                        <!-- Vector Sheet Music Display Card -->
+                        <div class="output-card" id="sheetMusicCard" style="display:none;">
+                            <div class="card-header">
+                                <h4><i data-lucide="music-4"></i> Điệp khúc (Sheet nhạc nốt)</h4>
+                            </div>
+                            <div class="card-body sheet-music-wrapper" style="background: white; padding: 12px; border-radius: 0 0 12px 12px; overflow-x: auto;">
+                                <div id="abcSheetMusic"></div>
+                            </div>
+                        </div>
+
+                        <!-- ABC Notation Editor (Hidden by default, shown in edit mode) -->
+                        <div class="output-card abc-edit-card" id="abcEditCard" style="display:none;">
+                            <div class="card-header">
+                                <h4><i data-lucide="music"></i> Sửa mã Sheet nhạc (ABC notation)</h4>
+                            </div>
+                            <div class="card-body">
+                                <textarea id="abcEditInput" class="textarea-control" style="font-family: monospace; font-size: 0.85rem; min-height: 120px;" placeholder="Khai báo tiêu đề và nốt nhạc điệp khúc..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- 1. Style Prompt Box -->
+                        <div class="output-card">
+                            <div class="card-header">
+                                <h4><i data-lucide="disc"></i> Suno Style of Music</h4>
+                                <button class="btn-copy" data-target="styleText"><i data-lucide="copy"></i> Sao chép</button>
+                            </div>
+                            <!-- Static view -->
+                            <div class="card-body style-box" id="styleText"></div>
+                            <!-- Editable view -->
+                            <input type="text" id="styleInput" class="input-control style-edit-input" style="display:none; margin: 12px; width: calc(100% - 24px);">
+                        </div>
+
+                        <!-- 2. Lyrics Box -->
+                        <div class="output-card">
+                            <div class="card-header">
+                                <h4><i data-lucide="text"></i> Lời bài hát & Tag phân đoạn</h4>
+                                <button class="btn-copy" data-target="lyricsText"><i data-lucide="copy"></i> Sao chép lời</button>
+                            </div>
+                            <!-- Static view -->
+                            <div class="card-body lyrics-box-wrapper" id="lyricsTextWrapper">
+                                <pre class="lyrics-pre" id="lyricsText"></pre>
+                            </div>
+                            <!-- Editable view -->
+                            <div class="lyrics-edit-wrapper" id="lyricsEditWrapper" style="display:none;">
+                                <textarea id="lyricsEditInput" class="textarea-control" style="min-height: 350px; font-family: inherit; width: 100%; border: none; background: rgba(15, 23, 42, 0.4); padding: 16px; color: #fff; border-radius: 0 0 12px 12px; resize: vertical;"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- 3. Suno Music Generator Box -->
+                        <div class="output-card suno-generator-card">
+                            <div class="card-header">
+                                <h4><i data-lucide="music-2"></i> Tạo nhạc trên Suno AI (Tự động)</h4>
+                                <button type="button" class="btn-action btn-sm btn-secondary" id="btnOpenSunoConfigInline" style="background: rgba(255,255,255,0.05); color: var(--text-secondary); border-color: var(--border-color); height: 26px; padding: 0 10px; font-size: 0.75rem; display: flex; align-items: center; gap: 4px; border-radius: 6px;"><i data-lucide="settings" style="width: 13px; height: 13px;"></i> Cấu hình Suno</button>
+                            </div>
+                            <div class="card-body" style="padding: 16px;">
+                                <div id="sunoConfigWarning" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.85rem; color: #fca5a5;">
+                                    <i data-lucide="alert-triangle" style="display: inline-block; vertical-align: middle; margin-right: 6px; color: var(--color-danger); width: 16px; height: 16px;"></i>
+                                    Chưa cấu hình Suno API! Vui lòng nhấn nút <strong>Cấu hình Suno</strong> để thiết lập trước khi tạo.
+                                </div>
+                                
+                                <div id="sunoGenControls">
+                                    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; background: rgba(255, 255, 255, 0.02); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                        <input type="checkbox" id="chkSunoInstrumental" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--color-primary);">
+                                        <label for="chkSunoInstrumental" style="font-size: 0.85rem; color: #fff; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; font-weight: 500;">
+                                            <i data-lucide="music-4" style="width: 14px; height: 14px; color: var(--color-warning);"></i> Tạo nhạc không lời (Instrumental)
+                                        </label>
+                                    </div>
+                                    <button type="button" class="btn-action btn-primary" id="btnGenSunoMusic" style="width: 100%; justify-content: center; font-weight: 600; font-size: 0.95rem; padding: 10px 16px;">
+                                        <i data-lucide="play-circle"></i> Bắt đầu tạo nhạc trên Suno
+                                    </button>
+                                </div>
+
+                                <!-- Trạng thái đang tải -->
+                                <div id="sunoGenLoading" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 24px 12px; text-align: center;">
+                                    <div class="music-wave" style="margin-bottom: 16px;">
+                                        <span></span><span></span><span></span><span></span><span></span>
+                                    </div>
+                                    <h5 id="sunoLoadingStatus" style="font-weight: 600; color: #fff; margin-bottom: 4px; font-size: 0.95rem;">Đang gửi yêu cầu lên Suno...</h5>
+                                    <p id="sunoLoadingSubtext" style="font-size: 0.8rem; color: var(--text-secondary);">Quá trình kết xuất có thể mất 1-2 phút. Vui lòng giữ tab này mở.</p>
+                                </div>
+
+                                <!-- Danh sách bài hát được tạo từ Suno -->
+                                <div id="sunoGeneratedClips" style="display: none; margin-top: 16px; border-top: 1px dashed var(--border-color); padding-top: 16px;">
+                                    <h5 style="margin-bottom: 12px; display: flex; align-items: center; gap: 6px; color: var(--color-warning); font-size: 0.9rem;">
+                                        <i data-lucide="disc"></i> Bản nhạc Suno đã tạo:
+                                    </h5>
+                                    <div id="sunoClipsList" style="display: flex; flex-direction: column; gap: 12px;">
+                                        <!-- Rendered dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Thư viện phím tắt và hướng dẫn -->
+                        <div class="instructions-card" style="display: flex; flex-direction: column; gap: 14px;">
+                            <div>
+                                <h5><i data-lucide="info"></i> Hướng dẫn sử dụng trên Suno AI:</h5>
+                                <ol>
+                                    <li>Bật chế độ <strong>Custom Mode</strong> trên Suno.</li>
+                                    <li>Sao chép ô <strong>Suno Style of Music</strong> dán vào ô <strong>Style of Music</strong>.</li>
+                                    <li>Sao chép <strong>Lời bài hát</strong> (Bật/Tắt hợp âm tùy sở thích) dán vào ô <strong>Lyrics</strong>.</li>
+                                    <li>Nhấn <strong>Create</strong> để tạo bài hát và tận hưởng tác phẩm chuyên nghiệp.</li>
+                                </ol>
+                            </div>
+                            
+                            <div class="suno-pro-tips" style="border-top: 1px dashed rgba(59, 130, 246, 0.2); padding-top: 12px; margin-top: 4px;">
+                                <h5 style="color: var(--color-warning); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;"><i data-lucide="award"></i> Mẹo tối ưu hóa chất lượng Suno AI:</h5>
+                                
+                                <details class="suno-details" style="margin-bottom: 8px;">
+                                    <summary class="suno-summary" style="cursor: pointer; font-size: 0.82rem; color: #fff; font-weight: 500; display: flex; align-items: center; gap: 6px; user-select: none;">
+                                        <i data-lucide="music-3" style="width: 14px; height: 14px; color: var(--color-primary);"></i> 1. Tối ưu ô Style of Music (Phong cách)
+                                    </summary>
+                                    <div style="padding: 8px 10px 4px 20px; font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;">
+                                        Thêm từ khóa mô tả âm thanh chất lượng cao bằng tiếng Anh:
+                                        <ul style="margin: 4px 0 0 14px; padding: 0; list-style-type: disc;">
+                                            <li><code style="color: var(--color-warning);">clean sound, crystal clear, sparkling, ethereal</code>: Âm thanh trong trẻo, lung linh.</li>
+                                            <li><code style="color: var(--color-warning);">acoustic, high vocals, clear production</code>: Giọng hát sáng, nổi bật, âm thanh sắc nét.</li>
+                                            <li><code style="color: var(--color-warning);">no distortion</code>: Tránh rè, méo tiếng.</li>
+                                        </ul>
+                                    </div>
+                                </details>
+
+                                <details class="suno-details" style="margin-bottom: 8px;">
+                                    <summary class="suno-summary" style="cursor: pointer; font-size: 0.82rem; color: #fff; font-weight: 500; display: flex; align-items: center; gap: 6px; user-select: none;">
+                                        <i data-lucide="text-quote" style="width: 14px; height: 14px; color: var(--color-primary);"></i> 2. Thẻ điều khiển trong Lyrics (Lời bài hát)
+                                    </summary>
+                                    <div style="padding: 8px 10px 4px 20px; font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;">
+                                        Chèn các thẻ điều khiển giọng hát/hiệu ứng trong ngoặc vuông <code>[...]</code>:
+                                        <ul style="margin: 4px 0 0 14px; padding: 0; list-style-type: disc;">
+                                            <li><code>[Intro: Sound Effect]</code> hoặc <code>[Intro: Ambient Texture]</code>: Tạo dải âm đầu trong trẻo, thư giãn.</li>
+                                            <li><code>[A Cappella]</code>: Chỉ hát không có nhạc cụ, thích hợp đoạn lắng đọng.</li>
+                                            <li><code>[Microphone Close]</code>: Hát sát mic, rõ tiếng thở, âm gió (hợp Ballad, trữ tình).</li>
+                                            <li><code>[Clear Voice]</code> hoặc <code>[High Pitch]</code>: Ép AI hát giọng cao và rõ lời hơn.</li>
+                                        </ul>
+                                    </div>
+                                </details>
+
+                                <details class="suno-details">
+                                    <summary class="suno-summary" style="cursor: pointer; font-size: 0.82rem; color: #fff; font-weight: 500; display: flex; align-items: center; gap: 6px; user-select: none;">
+                                        <i data-lucide="help-circle" style="width: 14px; height: 14px; color: var(--color-primary);"></i> 3. Mẹo xử lý kỹ thuật & Kéo dài bài hát
+                                    </summary>
+                                    <div style="padding: 8px 10px 4px 20px; font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;">
+                                        <ul style="margin: 0; padding-left: 14px; list-style-type: disc;">
+                                            <li>Suno thường bị rè nếu làm nhạc quá dồn dập. Hãy tạo nhạc nhịp chậm (Ballad, Lofi) để phô diễn độ trong của giọng & nhạc cụ tốt nhất.</li>
+                                            <li>Nếu bài hát đầu ra chưa ưng ý, dùng tính năng <strong>Extend (Kéo dài)</strong> từ đoạn trước đó và đổi Style thành <code>[clear and crisp recording]</code>.</li>
+                                        </ul>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: History Library -->
+                <div class="tab-content" id="tab-history-library" style="display: none;">
+                    <div class="history-container">
+                        <div class="history-header">
+                            <h3><i data-lucide="history"></i> Lịch sử đã sáng tác</h3>
+                            <button type="button" class="btn-action btn-secondary" id="btnRefreshHistory"><i data-lucide="refresh-cw"></i> Làm mới</button>
+                        </div>
+                        <div class="history-list" id="historyList">
+                            <!-- Rendered dynamically via JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal cấu hình Suno API -->
+    <div class="modal-overlay" id="sunoConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title"><i data-lucide="settings"></i> Cấu hình Tài khoản Suno API</h3>
+                <button type="button" class="modal-close" id="btnCloseSunoConfig"><i data-lucide="x"></i></button>
+            </div>
+            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 0.85rem; line-height: 1.4; color: #93c5fd;">
+                <p><i data-lucide="info" style="display: inline-block; vertical-align: middle; margin-right: 4px; color: var(--color-primary); width: 16px; height: 16px;"></i> <strong>Cấu hình xoay vòng tài khoản:</strong> Mở Suno.com, thực hiện tạo bài hát hoặc thao tác bất kỳ, nhấn F12 chuyển sang tab Network, click chuột phải vào request (ví dụ: <code>increment_play_count/v2</code>) chọn <strong>Copy -> Copy as cURL</strong> rồi dán vào khung bên dưới để thêm tài khoản vào danh sách.</p>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="sunoCurlInput" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 0.85rem;">Dán lệnh cURL từ Suno để thêm tài khoản:</label>
+                <textarea id="sunoCurlInput" class="textarea-control" style="min-height: 80px; font-family: monospace; font-size: 0.75rem;" placeholder="curl 'https://studio-api-prod.suno.com/...' ..."></textarea>
+                <button type="button" class="btn-action btn-sm btn-primary" id="btnImportSunoCurl" style="margin-top: 8px;"><i data-lucide="plus-circle"></i> Thêm tài khoản từ cURL</button>
+            </div>
+            
+            <div style="border-top: 1px dashed var(--border-color); margin: 16px 0; padding-top: 16px;">
+                <h5 style="margin-bottom: 12px; font-weight: 600; color: #fff; font-size: 0.9rem; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i data-lucide="users" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 4px; color: var(--color-warning);"></i> Danh sách tài khoản hoạt động:</span>
+                    <span id="sunoAccountsCount" style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.2); padding: 2px 8px; border-radius: 10px; color: var(--color-primary);">0 tài khoản</span>
+                </h5>
+                
+                <div id="sunoAccountsList" style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; padding-right: 4px; margin-bottom: 10px;">
+                    <!-- Rendered dynamically -->
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 12px; margin-bottom: 12px;">
+                <label for="cfgModelVersion" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 0.85rem;">Phiên bản Model Suno AI:</label>
+                <select id="cfgModelVersion" class="input-control" style="font-size: 0.85rem; background: rgba(15, 23, 42, 0.4); color: #fff; width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 12px;">
+                    <option value="chirp-fenix" selected>v5.5 (Tốt nhất - chirp-fenix)</option>
+                    <option value="chirp-crow">v5 (Tiên tiến - chirp-crow)</option>
+                    <option value="chirp-auk-turbo">v4.5 Turbo (Nhanh - chirp-auk-turbo)</option>
+                    <option value="chirp-v3-5">v3.5 (Cổ điển - chirp-v3-5)</option>
+                </select>
+            </div>
+
+            <details class="suno-details" style="margin-top: 12px;">
+                <summary class="suno-summary" style="cursor: pointer; font-size: 0.8rem; color: var(--text-secondary); user-select: none; display: flex; align-items: center; gap: 6px;">
+                    <i data-lucide="sliders" style="width: 14px; height: 14px;"></i> Xem chi tiết hoặc thêm thủ công
+                </summary>
+                <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                    <div class="grid-2-col" style="gap: 12px;">
+                        <div class="form-group">
+                            <label for="cfgAuthToken" style="font-size: 0.8rem; color: var(--text-secondary);">Authorization (Bearer token):</label>
+                            <input type="password" id="cfgAuthToken" class="input-control" style="font-size: 0.8rem;" placeholder="Bearer eyJhbGciOi...">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgBrowserToken" style="font-size: 0.8rem; color: var(--text-secondary);">Browser Token (JSON):</label>
+                            <input type="password" id="cfgBrowserToken" class="input-control" style="font-size: 0.8rem;" placeholder='{"token":"eyJ0aW1lc..."}'>
+                        </div>
+                    </div>
+                    <div class="grid-2-col" style="gap: 12px;">
+                        <div class="form-group">
+                            <label for="cfgDeviceId" style="font-size: 0.8rem; color: var(--text-secondary);">Device ID:</label>
+                            <input type="text" id="cfgDeviceId" class="input-control" style="font-size: 0.8rem;" placeholder="39f91d6b-...">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgUserTier" style="font-size: 0.8rem; color: var(--text-secondary);">User Tier ID:</label>
+                            <input type="text" id="cfgUserTier" class="input-control" style="font-size: 0.8rem;" placeholder="4497580c-...">
+                        </div>
+                    </div>
+                    <div class="grid-2-col" style="gap: 12px;">
+                        <div class="form-group">
+                            <label for="cfgSessionToken" style="font-size: 0.8rem; color: var(--text-secondary);">Session Token:</label>
+                            <input type="text" id="cfgSessionToken" class="input-control" style="font-size: 0.8rem;" placeholder="3d8d709b-...">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgBodyToken" style="font-size: 0.8rem; color: var(--text-secondary);">Body Token (P1_...):</label>
+                            <input type="text" id="cfgBodyToken" class="input-control" style="font-size: 0.8rem;" placeholder="P1_... (Không bắt buộc)">
+                        </div>
+                    </div>
+                    <button type="button" class="btn-action btn-sm btn-secondary" id="btnManualAddAccount" style="align-self: flex-end; margin-top: 8px;"><i data-lucide="plus"></i> Thêm tài khoản thủ công</button>
+                </div>
+            </details>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <button type="button" class="btn-action btn-primary" id="btnSaveSunoConfig"><i data-lucide="check"></i> Hoàn tất</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script logic -->
+    <script src="app.js"></script>
+</body>
+</html>
