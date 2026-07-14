@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o suno-composer .
 FROM alpine:latest
 
 # Cài đặt chứng chỉ SSL CA Certificates để gọi API HTTPS (Gemini API) thành công
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates rclone
 
 WORKDIR /root/
 

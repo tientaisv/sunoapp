@@ -21,6 +21,7 @@ type SunoClip struct {
 	Prompt       string    `json:"prompt"`
 	CreatedAt    time.Time `json:"createdAt"`
 	AccountEmail string    `json:"accountEmail,omitempty"`
+	DriveURL     string    `json:"driveUrl,omitempty"`
 }
 
 // SavedSong cấu trúc lưu trữ thông tin đầy đủ của bài hát và cấu hình

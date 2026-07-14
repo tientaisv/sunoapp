@@ -1578,13 +1578,14 @@ async function generateSunoMusic() {
             currentSongData.sunoClips = clips.map(c => ({
                 id: c.id,
                 title: c.title,
-                audioUrl: c.audio_url || "",
-                videoUrl: c.video_url || "",
-                imageUrl: c.image_url || "",
+                audioUrl: c.audio_url || c.audioUrl || "",
+                videoUrl: c.video_url || c.videoUrl || "",
+                imageUrl: c.image_url || c.imageUrl || "",
                 status: c.status || "queued",
-                prompt: c.metadata ? c.metadata.prompt : "",
+                prompt: c.metadata ? c.metadata.prompt : (c.prompt || ""),
                 createdAt: new Date(),
-                accountEmail: account.email
+                accountEmail: account.email,
+                driveUrl: c.driveUrl || c.drive_url || ""
             }));
             
             renderSunoClips(currentSongData.sunoClips);
@@ -1661,17 +1662,21 @@ function pollSunoStatus(clipIds, songId, account) {
             if (clips.length === 0) return;
             
             // Format clips cho Client
-            const formattedClips = clips.map(c => ({
-                id: c.id,
-                title: c.title,
-                audioUrl: c.audio_url || "",
-                videoUrl: c.video_url || "",
-                imageUrl: c.image_url || "",
-                status: c.status || "queued",
-                prompt: c.metadata ? c.metadata.prompt : "",
-                createdAt: new Date(c.created_at),
-                accountEmail: account.email
-            }));
+            const formattedClips = clips.map(c => {
+                const existing = currentSongData.sunoClips.find(x => x.id === c.id);
+                return {
+                    id: c.id,
+                    title: c.title,
+                    audioUrl: c.audio_url || c.audioUrl || "",
+                    videoUrl: c.video_url || c.videoUrl || "",
+                    imageUrl: c.image_url || c.imageUrl || "",
+                    status: c.status || "queued",
+                    prompt: c.metadata ? c.metadata.prompt : (c.prompt || ""),
+                    createdAt: c.created_at ? new Date(c.created_at) : (existing ? existing.createdAt : new Date()),
+                    accountEmail: account.email,
+                    driveUrl: (existing && existing.driveUrl) || c.driveUrl || c.drive_url || ""
+                };
+            });
             
             currentSongData.sunoClips = formattedClips;
             renderSunoClips(formattedClips);
@@ -1739,7 +1744,7 @@ function renderSunoClips(clips) {
                 ${(clip.status === 'complete' || clip.status === 'streaming') && clip.audioUrl ? `
                     <div class="suno-clip-player-wrapper">
                         <audio src="${clip.audioUrl}" controls class="suno-clip-audio"></audio>
-                        <div class="suno-clip-actions">
+                        <div class="suno-clip-actions" id="actions-${clip.id}">
                             <a href="/api/suno/download?url=${encodeURIComponent(clip.audioUrl)}&name=${encodeURIComponent((currentSongData.title || clip.title || 'music').trim())}" target="_blank" class="suno-clip-btn suno-clip-btn-primary">
                                 <i data-lucide="download"></i> Tải MP3
                             </a>
@@ -1748,6 +1753,29 @@ function renderSunoClips(clips) {
                                     <i data-lucide="external-link"></i> Xem Video
                                 </a>
                             ` : ''}
+                            ${clip.driveUrl ? `
+                                <a href="${clip.driveUrl}" target="_blank" class="suno-clip-btn suno-clip-btn-drive">
+                                    <i data-lucide="hard-drive"></i> Mở Drive
+                                </a>
+                            ` : `
+                                <button type="button" class="suno-clip-btn" onclick="publishToDrive('${clip.id}', '${escapeHTML(clip.audioUrl)}', this)">
+                                    <i data-lucide="cloud-upload"></i> Đăng lên Drive
+                                </button>
+                            `}
+                        </div>
+                        <div class="suno-clip-progress-wrapper" id="progress-wrapper-${clip.id}" style="display: none;">
+                            <div class="suno-clip-progress-container">
+                                <div class="suno-clip-progress-header">
+                                    <span class="suno-clip-progress-text" id="progress-text-${clip.id}">
+                                        <i data-lucide="loader-2" class="spin" style="width: 12px; height: 12px;"></i>
+                                        Đang tải file từ Suno...
+                                    </span>
+                                    <span class="suno-clip-progress-pct" id="progress-pct-${clip.id}">0%</span>
+                                </div>
+                                <div class="suno-clip-progress-bar-bg">
+                                    <div class="suno-clip-progress-bar-fill" id="progress-fill-${clip.id}"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 ` : ''}
@@ -1785,4 +1813,84 @@ async function checkAuthStatus() {
     } catch (e) {
         console.error("Lỗi kiểm tra cấu hình auth:", e);
     }
+}
+
+// Đăng tải nhạc lên Google Drive qua rclone bằng SSE
+function publishToDrive(clipId, audioUrl, buttonEl) {
+    if (!currentSongData || !currentSongData.id) {
+        alert("Lỗi: Không xác định được thông tin tác phẩm hiện tại.");
+        return;
+    }
+
+    const actionsContainer = document.getElementById(`actions-${clipId}`);
+    const progressWrapper = document.getElementById(`progress-wrapper-${clipId}`);
+    const progressText = document.getElementById(`progress-text-${clipId}`);
+    const progressPct = document.getElementById(`progress-pct-${clipId}`);
+    const progressFill = document.getElementById(`progress-fill-${clipId}`);
+
+    if (!actionsContainer || !progressWrapper) return;
+
+    // Ẩn thanh hành động, hiện thanh tiến trình
+    actionsContainer.style.display = "none";
+    progressWrapper.style.display = "block";
+
+    const updateUI = (text, percent) => {
+        if (progressText) progressText.innerHTML = `<i data-lucide="loader-2" class="spin" style="width: 12px; height: 12px;"></i> ${text}`;
+        if (progressPct) progressPct.textContent = `${percent}%`;
+        if (progressFill) progressFill.style.width = `${percent}%`;
+        lucide.createIcons();
+    };
+
+    updateUI("Bắt đầu kết nối server...", 0);
+
+    const queryParams = new URLSearchParams({
+        song_id: currentSongData.id,
+        clip_id: clipId,
+        audio_url: audioUrl
+    });
+
+    const eventSource = new EventSource(`/api/suno/publish-drive?${queryParams.toString()}`);
+
+    eventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.status === "downloading") {
+                updateUI(data.message || "Đang tải file từ Suno...", data.progress);
+            } else if (data.status === "uploading") {
+                updateUI(data.message || "Đang chuyển file lên Google Drive...", data.progress);
+            } else if (data.status === "finalizing") {
+                updateUI(data.message || "Đang thiết lập liên kết...", data.progress);
+            } else if (data.status === "success") {
+                eventSource.close();
+                const driveUrl = data.drive_url;
+                
+                // Cập nhật dữ liệu client
+                const clip = currentSongData.sunoClips.find(c => c.id === clipId);
+                if (clip) {
+                    clip.driveUrl = driveUrl;
+                }
+
+                // Render lại danh sách clip
+                renderSunoClips(currentSongData.sunoClips);
+                alert("Đã chuyển nhạc lên Google Drive thành công!");
+            } else if (data.status === "error") {
+                eventSource.close();
+                alert(`Lỗi upload: ${data.message}`);
+                // Khôi phục nút bấm
+                progressWrapper.style.display = "none";
+                actionsContainer.style.display = "flex";
+            }
+        } catch (e) {
+            console.error("Lỗi parse SSE event:", e);
+        }
+    };
+
+    eventSource.onerror = function(err) {
+        console.error("Lỗi kết nối SSE:", err);
+        eventSource.close();
+        alert("Lỗi kết nối Server-Sent Events khi đang truyền dữ liệu.");
+        // Khôi phục nút bấm
+        progressWrapper.style.display = "none";
+        actionsContainer.style.display = "flex";
+    };
 }

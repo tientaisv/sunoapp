@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 	"taonhac/internal/composer"
@@ -817,6 +818,221 @@ func main() {
 		if err != nil {
 			log.Println("[Download] Lỗi khi đang truyền luồng tải file:", err)
 		}
+	})
+
+	// Route API publish file lên Google Drive qua rclone (SSE stream progress)
+	mux.HandleFunc("/api/suno/publish-drive", func(w http.ResponseWriter, r *http.Request) {
+		// Thiết lập headers cho kết nối SSE
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Không hỗ trợ Streaming!", http.StatusInternalServerError)
+			return
+		}
+
+		sendEvent := func(status string, progress int, msg string, extra map[string]interface{}) {
+			payload := map[string]interface{}{
+				"status":   status,
+				"progress": progress,
+				"message":  msg,
+			}
+			for k, v := range extra {
+				payload[k] = v
+			}
+			data, _ := json.Marshal(payload)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+
+		songID := r.URL.Query().Get("song_id")
+		clipID := r.URL.Query().Get("clip_id")
+		audioURL := r.URL.Query().Get("audio_url")
+
+		if songID == "" || clipID == "" || audioURL == "" {
+			sendEvent("error", 0, "Thiếu tham số bắt buộc: song_id, clip_id, hoặc audio_url", nil)
+			return
+		}
+
+		// Lấy thông tin bài hát để đặt tên file
+		song, err := mgr.Get(songID)
+		if err != nil {
+			sendEvent("error", 0, "Không tìm thấy bài hát trong hệ thống: "+err.Error(), nil)
+			return
+		}
+
+		clipTitle := "suno-song"
+		clipIdx := -1
+		for i, c := range song.SunoClips {
+			if c.ID == clipID {
+				clipIdx = i
+				if c.Title != "" {
+					clipTitle = c.Title
+				}
+				break
+			}
+		}
+		if clipTitle == "suno-song" && song.Title != "" {
+			clipTitle = song.Title
+		}
+
+		// Làm sạch tên file
+		fileName := clipTitle
+		fileName = strings.ReplaceAll(fileName, "\n", "")
+		fileName = strings.ReplaceAll(fileName, "\r", "")
+		fileName = strings.ReplaceAll(fileName, "\"", "")
+		fileName = strings.ReplaceAll(fileName, "'", "")
+		fileName = strings.ReplaceAll(fileName, "/", "-")
+		fileName = strings.ReplaceAll(fileName, "\\", "-")
+		fileName = strings.TrimSpace(fileName)
+		if !strings.HasSuffix(strings.ToLower(fileName), ".mp3") {
+			fileName += ".mp3"
+		}
+
+		sendEvent("downloading", 0, "Đang tải file từ Suno CDN...", nil)
+
+		// 1. Tải file từ CDN về file tạm local
+		tempFile, err := os.CreateTemp("", "suno-audio-*.mp3")
+		if err != nil {
+			sendEvent("error", 0, "Không thể tạo file tạm local: "+err.Error(), nil)
+			return
+		}
+		tempFilePath := tempFile.Name()
+		defer os.Remove(tempFilePath) // Dọn dẹp phòng hờ nếu move lỗi
+		defer tempFile.Close()
+
+		resp, err := http.Get(audioURL)
+		if err != nil {
+			sendEvent("error", 0, "Không thể kết nối tải nhạc từ Suno CDN: "+err.Error(), nil)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			sendEvent("error", 0, fmt.Sprintf("Suno CDN trả về mã trạng thái lỗi %d", resp.StatusCode), nil)
+			return
+		}
+
+		contentLength := resp.ContentLength
+		buffer := make([]byte, 32*1024) // 32KB chunk
+		var totalDownloaded int64
+
+		for {
+			n, readErr := resp.Body.Read(buffer)
+			if n > 0 {
+				_, writeErr := tempFile.Write(buffer[:n])
+				if writeErr != nil {
+					sendEvent("error", 0, "Không thể ghi dữ liệu file tạm: "+writeErr.Error(), nil)
+					return
+				}
+				totalDownloaded += int64(n)
+				if contentLength > 0 {
+					pct := int((totalDownloaded * 30) / contentLength) // Chiếm 0% - 30% tổng thanh tiến trình
+					sendEvent("downloading", pct, fmt.Sprintf("Đang tải file nhạc: %d%%", int((totalDownloaded*100)/contentLength)), nil)
+				} else {
+					sendEvent("downloading", 15, "Đang tải file nhạc...", nil)
+				}
+			}
+			if readErr == io.EOF {
+				break
+			}
+			if readErr != nil {
+				sendEvent("error", 0, "Lỗi khi đang đọc dữ liệu tải nhạc: "+readErr.Error(), nil)
+				return
+			}
+		}
+		tempFile.Close()
+
+		sendEvent("uploading", 30, "Đang chuẩn bị chuyển dữ liệu lên Drive...", nil)
+
+		// 2. Chạy rclone moveto để chuyển file lên Drive
+		cmd := exec.Command("rclone", "moveto", tempFilePath, "vtw:"+fileName,
+			"--drive-root-folder-id", "1tp9JwMMe1_BDJDlebs0OUHBR-MCgrWyv",
+			"--config", "data/rclone.conf",
+			"--use-json-log",
+			"--stats", "200ms",
+		)
+
+		stderrPipe, err := cmd.StderrPipe()
+		if err != nil {
+			sendEvent("error", 30, "Không thể mở luồng ghi nhận tiến trình rclone: "+err.Error(), nil)
+			return
+		}
+
+		if err := cmd.Start(); err != nil {
+			sendEvent("error", 30, "Không thể khởi chạy tiến trình rclone: "+err.Error(), nil)
+			return
+		}
+
+		// Đọc log stderr của rclone để parse phần trăm tiến trình
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			line := scanner.Text()
+			var logData struct {
+				Stats struct {
+					Bytes        int64 `json:"bytes"`
+					TotalBytes   int64 `json:"totalBytes"`
+					Transferring []struct {
+						Percentage int `json:"percentage"`
+					} `json:"transferring"`
+				} `json:"stats"`
+			}
+			
+			if err := json.Unmarshal([]byte(line), &logData); err == nil {
+				if len(logData.Stats.Transferring) > 0 {
+					pctUp := logData.Stats.Transferring[0].Percentage
+					pctOverall := 30 + int((pctUp * 65) / 100) // Chiếm 30% - 95% tổng thanh tiến trình
+					sendEvent("uploading", pctOverall, fmt.Sprintf("Đang tải lên Google Drive: %d%%", pctUp), nil)
+				} else if logData.Stats.TotalBytes > 0 {
+					// Fallback tính toán
+					pctUp := int((logData.Stats.Bytes * 100) / logData.Stats.TotalBytes)
+					pctOverall := 30 + int((pctUp * 65) / 100)
+					sendEvent("uploading", pctOverall, fmt.Sprintf("Đang tải lên Google Drive: %d%%", pctUp), nil)
+				}
+			}
+		}
+
+		if err := cmd.Wait(); err != nil {
+			sendEvent("error", 0, "Lỗi upload lên Google Drive: "+err.Error(), nil)
+			return
+		}
+
+		sendEvent("finalizing", 95, "Đang thiết lập liên kết chia sẻ công khai...", nil)
+
+		// 3. Chạy rclone link để sinh link public
+		linkCmd := exec.Command("rclone", "link", "vtw:"+fileName,
+			"--drive-root-folder-id", "1tp9JwMMe1_BDJDlebs0OUHBR-MCgrWyv",
+			"--config", "data/rclone.conf",
+		)
+		var linkStdout, linkStderr bytes.Buffer
+		linkCmd.Stdout = &linkStdout
+		linkCmd.Stderr = &linkStderr
+
+		if err := linkCmd.Run(); err != nil {
+			sendEvent("error", 95, "Lỗi sinh liên kết chia sẻ từ Google Drive: "+linkStderr.String(), nil)
+			return
+		}
+
+		driveURL := strings.TrimSpace(linkStdout.String())
+		if driveURL == "" {
+			sendEvent("error", 95, "Không nhận được liên kết phản hồi từ rclone", nil)
+			return
+		}
+
+		// 4. Lưu liên kết vào song metadata
+		if clipIdx >= 0 {
+			song.SunoClips[clipIdx].DriveURL = driveURL
+			if err := mgr.Save(song); err != nil {
+				log.Printf("[Drive] Lỗi cập nhật bài hát sau khi upload: %v", err)
+			}
+		}
+
+		sendEvent("success", 100, "Đã tải lên và chia sẻ thành công!", map[string]interface{}{
+			"drive_url": driveURL,
+		})
 	})
 
 	// Phục vụ frontend static files bằng Go embed
