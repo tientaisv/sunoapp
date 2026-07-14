@@ -242,6 +242,28 @@ func callSunoAPI(method, endpoint string, body []byte, authToken, browserToken, 
 	return respBytes, nil
 }
 
+func mergeClips(existing []storage.SunoClip, newClips []storage.SunoClip) []storage.SunoClip {
+	clipMap := make(map[string]int)
+	for i, c := range existing {
+		clipMap[c.ID] = i
+	}
+
+	result := make([]storage.SunoClip, len(existing))
+	copy(result, existing)
+
+	for _, nc := range newClips {
+		if idx, found := clipMap[nc.ID]; found {
+			if nc.DriveURL == "" && result[idx].DriveURL != "" {
+				nc.DriveURL = result[idx].DriveURL
+			}
+			result[idx] = nc
+		} else {
+			result = append(result, nc)
+		}
+	}
+	return result
+}
+
 func main() {
 	loadEnv()
 	initAuth()
@@ -377,7 +399,7 @@ func main() {
 				for _, c := range sunoResp.Clips {
 					storageClips = append(storageClips, apiClipToStorageClip(c, req.AccountEmail))
 				}
-				song.SunoClips = storageClips
+				song.SunoClips = mergeClips(song.SunoClips, storageClips)
 				mgr.Save(song)
 			}
 		}
@@ -470,7 +492,7 @@ func main() {
 				for _, c := range apiClips {
 					storageClips = append(storageClips, apiClipToStorageClip(c, req.AccountEmail))
 				}
-				song.SunoClips = storageClips
+				song.SunoClips = mergeClips(song.SunoClips, storageClips)
 				mgr.Save(song)
 			}
 		}

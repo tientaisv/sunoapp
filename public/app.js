@@ -1510,8 +1510,8 @@ async function generateSunoMusic() {
         return;
     }
     
-    let startIndex = parseInt(localStorage.getItem("suno_current_account_index") || "0", 10);
-    startIndex = startIndex % accounts.length;
+    // Chọn ngẫu nhiên 1 tài khoản trong danh sách
+    let startIndex = Math.floor(Math.random() * accounts.length);
     
     const controls = document.getElementById("sunoGenControls");
     const loading = document.getElementById("sunoGenLoading");
@@ -1525,8 +1525,8 @@ async function generateSunoMusic() {
         const idx = currentIdx % accounts.length;
         const account = accounts[idx];
         
-        // Lưu index tiếp theo
-        localStorage.setItem("suno_current_account_index", (idx + 1) % accounts.length);
+        // Cập nhật index đang chạy sang tài khoản vừa chọn
+        localStorage.setItem("suno_current_account_index", idx);
         
         loadingStatus.textContent = `Đang gửi yêu cầu tạo nhạc lên Suno...`;
         loadingSubtext.textContent = `Sử dụng tài khoản: ${account.email} (${attemptCount + 1}/${accounts.length})`;
@@ -1575,7 +1575,7 @@ async function generateSunoMusic() {
             
             const clipIds = clips.map(c => c.id).filter(id => !!id);
             
-            currentSongData.sunoClips = clips.map(c => ({
+            const formatted = clips.map(c => ({
                 id: c.id,
                 title: c.title,
                 audioUrl: c.audio_url || c.audioUrl || "",
@@ -1588,7 +1588,22 @@ async function generateSunoMusic() {
                 driveUrl: c.driveUrl || c.drive_url || ""
             }));
             
-            renderSunoClips(currentSongData.sunoClips);
+            // Trộn vào danh sách hiện tại thay vì ghi đè hoàn toàn
+            const merged = [...(currentSongData.sunoClips || [])];
+            formatted.forEach(nc => {
+                const idx = merged.findIndex(x => x.id === nc.id);
+                if (idx > -1) {
+                    if (!nc.driveUrl && merged[idx].driveUrl) {
+                        nc.driveUrl = merged[idx].driveUrl;
+                    }
+                    merged[idx] = nc;
+                } else {
+                    merged.push(nc);
+                }
+            });
+            
+            currentSongData.sunoClips = merged;
+            renderSunoClips(merged);
             
             loadingStatus.textContent = "Đang xếp hàng tạo nhạc trên Suno...";
             loadingSubtext.textContent = "Nhạc sĩ AI đang kết xuất giai điệu. Có hai phiên bản đang được xử lý.";
@@ -1678,8 +1693,19 @@ function pollSunoStatus(clipIds, songId, account) {
                 };
             });
             
-            currentSongData.sunoClips = formattedClips;
-            renderSunoClips(formattedClips);
+            // Trộn các clips từ poll vào danh sách hiện tại của Client
+            const merged = [...(currentSongData.sunoClips || [])];
+            formattedClips.forEach(nc => {
+                const idx = merged.findIndex(x => x.id === nc.id);
+                if (idx > -1) {
+                    merged[idx] = nc;
+                } else {
+                    merged.push(nc);
+                }
+            });
+            
+            currentSongData.sunoClips = merged;
+            renderSunoClips(merged);
             
             // Kiểm tra trạng thái hoàn tất
             const allFinished = formattedClips.every(c => c.status === "complete" || c.status === "failed");

@@ -449,6 +449,14 @@
                                 </div>
                                 
                                 <div id="sunoGenControls">
+                                    <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; background: rgba(255, 255, 255, 0.02); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                        <label for="sunoAccountSelect" style="font-size: 0.8rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 2px;">
+                                            <i data-lucide="user" style="width: 14px; height: 14px; color: var(--color-primary);"></i> Chọn tài khoản tạo nhạc:
+                                        </label>
+                                        <select id="sunoAccountSelect" class="input-control" style="font-size: 0.85rem; background: rgba(15, 23, 42, 0.4); color: #fff; width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 10px; cursor: pointer;">
+                                            <option value="random">Xoay vòng ngẫu nhiên tài khoản</option>
+                                        </select>
+                                    </div>
                                     <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; background: rgba(255, 255, 255, 0.02); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                                         <input type="checkbox" id="chkSunoInstrumental" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--color-primary);">
                                         <label for="chkSunoInstrumental" style="font-size: 0.85rem; color: #fff; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; font-weight: 500;">
