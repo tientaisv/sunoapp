@@ -1179,7 +1179,7 @@ function downloadPDF() {
 // SUNO INTEGRATION LOGIC
 // ==========================================
 
-let sunoPollInterval = null;
+const sunoPollIntervals = {};
 
 // Khởi tạo các sự kiện cho tích hợp Suno
 function initSunoIntegration() {
@@ -1251,6 +1251,7 @@ function initSunoIntegration() {
         const userTier = document.getElementById("cfgUserTier").value.trim();
         const sessionToken = document.getElementById("cfgSessionToken").value.trim();
         const bodyToken = document.getElementById("cfgBodyToken").value.trim();
+        const cookie = document.getElementById("cfgCookie").value.trim();
         
         if (!auth) {
             alert("Vui lòng điền Authorization token!");
@@ -1263,7 +1264,8 @@ function initSunoIntegration() {
             deviceId: deviceId,
             userTier: userTier,
             createSessionToken: sessionToken,
-            sunoToken: bodyToken
+            sunoToken: bodyToken,
+            cookie: cookie
         };
         
         addSunoAccount(config);
@@ -1275,6 +1277,7 @@ function initSunoIntegration() {
         document.getElementById("cfgUserTier").value = "";
         document.getElementById("cfgSessionToken").value = "";
         document.getElementById("cfgBodyToken").value = "";
+        document.getElementById("cfgCookie").value = "";
         
         renderSunoAccounts();
         updateSunoUIState();
@@ -1304,6 +1307,8 @@ function parseSunoCurl(curlText) {
                 config.browserToken = value;
             } else if (key === 'device-id') {
                 config.deviceId = value;
+            } else if (key === 'cookie') {
+                config.cookie = value;
             }
         }
     }
@@ -1364,6 +1369,23 @@ function saveSunoAccounts(accounts) {
     }
 }
 
+function updateStoredSunoToken(email, newAuthToken) {
+    if (!newAuthToken || !email) return;
+    let accounts = getSunoAccounts();
+    const idx = accounts.findIndex(acc => acc.email === email);
+    if (idx > -1) {
+        accounts[idx].authToken = newAuthToken;
+        const jwtDecoded = decodeJWT(newAuthToken);
+        if (jwtDecoded && jwtDecoded.exp) {
+            accounts[idx].expiry = jwtDecoded.exp * 1000;
+        }
+        saveSunoAccounts(accounts);
+        renderSunoAccounts();
+        updateSunoUIState();
+        console.log(`Đã tự động gia hạn token cho tài khoản: ${email}`);
+    }
+}
+
 function addSunoAccount(config) {
     let accounts = getSunoAccounts();
     
@@ -1385,6 +1407,7 @@ function addSunoAccount(config) {
         authToken: config.authToken,
         browserToken: config.browserToken || "",
         deviceId: config.deviceId || "",
+        cookie: config.cookie || "",
         userTier: config.userTier || "4497580c-f4eb-4f86-9f0e-960eb7c48d7d",
         createSessionToken: config.createSessionToken || "3d8d709b-97f1-4867-acfb-a014c499b58d",
         bodyToken: config.sunoToken || "",
@@ -1488,7 +1511,12 @@ function renderSunoAccounts() {
                 </div>
                 <div class="suno-account-expiry">Hạn: ${expiryText} | <span class="suno-account-status ${statusClass}">${statusText}</span></div>
             </div>
-            <div class="suno-account-actions">
+            <div class="suno-account-actions" style="display: flex; gap: 6px;">
+                ${acc.cookie ? `
+                <button type="button" class="suno-account-btn-refresh suno-clip-btn" data-id="${acc.id}" style="padding: 4px 8px; border-color: rgba(59, 130, 246, 0.2); color: var(--color-primary); background: rgba(59, 130, 246, 0.05);">
+                    <i data-lucide="refresh-cw" style="width: 12px; height: 12px;"></i> Làm mới
+                </button>
+                ` : ''}
                 <button type="button" class="suno-account-btn-delete suno-clip-btn" data-id="${acc.id}" style="padding: 4px 8px; border-color: rgba(239, 68, 68, 0.2); color: var(--color-danger); background: rgba(239, 68, 68, 0.05);">
                     <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i> Xóa
                 </button>
@@ -1505,8 +1533,71 @@ function renderSunoAccounts() {
             deleteSunoAccount(id);
         });
     });
+
+    listContainer.querySelectorAll(".suno-account-btn-refresh").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute("data-id");
+            await forceRefreshAccount(id);
+        });
+    });
     
     lucide.createIcons();
+}
+
+// Gọi API thủ công để làm mới session bằng cookie
+async function forceRefreshAccount(id) {
+    const accounts = getSunoAccounts();
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+    
+    if (!acc.cookie) {
+        alert("Tài khoản này không lưu Cookie để làm mới! Vui lòng thêm lại bằng cURL.");
+        return;
+    }
+    
+    const btn = document.querySelector(`.suno-account-btn-refresh[data-id="${id}"]`);
+    let originalHtml = "";
+    if (btn) {
+        originalHtml = btn.innerHTML;
+        btn.innerHTML = `<i data-lucide="loader" class="spin" style="width: 12px; height: 12px;"></i> Đang chạy...`;
+        lucide.createIcons();
+        btn.disabled = true;
+    }
+    
+    try {
+        const response = await fetch("/api/suno/refresh", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                cookie: acc.cookie
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || `Lỗi ${response.status}`);
+        }
+        
+        if (data.new_auth_token) {
+            updateStoredSunoToken(acc.email, data.new_auth_token);
+            alert(`Làm mới session thành công cho tài khoản ${acc.email}!`);
+        } else {
+            throw new Error("Không nhận được token mới từ server.");
+        }
+    } catch (err) {
+        console.error("Lỗi gia hạn session:", err);
+        alert(`Lỗi gia hạn session: ${err.message}`);
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalHtml;
+            lucide.createIcons();
+            btn.disabled = false;
+        }
+    }
 }
 
 // Cập nhật dropdown chọn tài khoản tạo nhạc
@@ -1618,11 +1709,17 @@ async function generateSunoMusic() {
                     title: currentSongData.title || "Bài nhạc AI",
                     model_version: modelVersion,
                     make_instrumental: makeInstrumental,
-                    account_email: account.email
+                    account_email: account.email,
+                    cookie: account.cookie || ""
                 })
             });
             
             const data = await response.json();
+            
+            if (data.new_auth_token) {
+                updateStoredSunoToken(account.email, data.new_auth_token);
+                account.authToken = data.new_auth_token;
+            }
             
             if (!response.ok) {
                 throw new Error(data.error || `Lỗi phản hồi ${response.status}`);
@@ -1694,13 +1791,11 @@ async function generateSunoMusic() {
 
 // Vòng lặp kiểm tra tiến độ của Suno bài hát (Polling)
 function pollSunoStatus(clipIds, songId, account) {
-    if (sunoPollInterval) {
-        clearInterval(sunoPollInterval);
-    }
+    if (!songId) return; // Không có ID bài hát thì không thể tracking hoặc lưu trữ
     
-    const authToken = account.authToken;
-    const browserToken = account.browserToken;
-    const deviceId = account.deviceId;
+    if (sunoPollIntervals[songId]) {
+        clearInterval(sunoPollIntervals[songId]);
+    }
     
     const controls = document.getElementById("sunoGenControls");
     const loading = document.getElementById("sunoGenLoading");
@@ -1709,29 +1804,35 @@ function pollSunoStatus(clipIds, songId, account) {
     
     let dots = 0;
     
-    sunoPollInterval = setInterval(async () => {
+    sunoPollIntervals[songId] = setInterval(async () => {
         dots = (dots + 1) % 4;
         const dotStr = ".".repeat(dots);
         
         try {
+            const currentAccount = getSunoAccounts().find(a => a.email === account.email) || account;
             const response = await fetch("/api/suno/feed", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    auth_token: authToken,
-                    browser_token: browserToken,
-                    device_id: deviceId,
+                    auth_token: currentAccount.authToken,
+                    browser_token: currentAccount.browserToken,
+                    device_id: currentAccount.deviceId,
                     clip_ids: clipIds,
                     song_id: songId || "",
-                    account_email: account.email
+                    account_email: currentAccount.email,
+                    cookie: currentAccount.cookie || ""
                 })
             });
             
             if (!response.ok) return; // Tiếp tục thử lại ở lần sau
             
             const data = await response.json();
+            
+            if (data.new_auth_token) {
+                updateStoredSunoToken(account.email, data.new_auth_token);
+            }
             
             let clips = [];
             if (Array.isArray(data)) {
@@ -1744,7 +1845,10 @@ function pollSunoStatus(clipIds, songId, account) {
             
             // Format clips cho Client
             const formattedClips = clips.map(c => {
-                const existing = currentSongData.sunoClips.find(x => x.id === c.id);
+                let existing = null;
+                if (songId === currentSongData.id) {
+                    existing = currentSongData.sunoClips.find(x => x.id === c.id);
+                }
                 return {
                     id: c.id,
                     title: c.title,
@@ -1759,47 +1863,59 @@ function pollSunoStatus(clipIds, songId, account) {
                 };
             });
             
-            // Trộn các clips từ poll vào danh sách hiện tại của Client
-            const merged = [...(currentSongData.sunoClips || [])];
-            formattedClips.forEach(nc => {
-                const idx = merged.findIndex(x => x.id === nc.id);
-                if (idx > -1) {
-                    merged[idx] = nc;
-                } else {
-                    merged.push(nc);
-                }
-            });
-            
-            currentSongData.sunoClips = merged;
-            renderSunoClips(merged);
+            // Chỉ cập nhật currentSongData và UI nếu bài hát đang xem trùng với bài hát đang poll
+            if (songId === currentSongData.id) {
+                const merged = [...(currentSongData.sunoClips || [])];
+                formattedClips.forEach(nc => {
+                    const idx = merged.findIndex(x => x.id === nc.id);
+                    if (idx > -1) {
+                        // Không đè driveUrl nếu bên nc trống nhưng merged có
+                        if (!nc.driveUrl && merged[idx].driveUrl) {
+                            nc.driveUrl = merged[idx].driveUrl;
+                        }
+                        merged[idx] = nc;
+                    } else {
+                        merged.push(nc);
+                    }
+                });
+                
+                currentSongData.sunoClips = merged;
+                renderSunoClips(merged);
+            }
             
             // Kiểm tra trạng thái hoàn tất
             const allFinished = formattedClips.every(c => c.status === "complete" || c.status === "failed");
             const anyStreaming = formattedClips.some(c => c.status === "streaming");
             
-            if (anyStreaming) {
-                loadingStatus.textContent = "Đang kết xuất giai điệu" + dotStr;
-                loadingSubtext.textContent = "Nhạc sĩ AI đang kết xuất nhạc. Vui lòng chờ hoàn thành để nghe thử.";
-            } else {
-                loadingStatus.textContent = "Đang xử lý giai điệu" + dotStr;
+            if (songId === currentSongData.id) {
+                if (anyStreaming) {
+                    loadingStatus.textContent = "Đang kết xuất giai điệu" + dotStr;
+                    loadingSubtext.textContent = "Nhạc sĩ AI đang kết xuất nhạc. Vui lòng chờ hoàn thành để nghe thử.";
+                } else {
+                    loadingStatus.textContent = "Đang xử lý giai điệu" + dotStr;
+                }
             }
             
             if (allFinished) {
-                clearInterval(sunoPollInterval);
-                sunoPollInterval = null;
+                clearInterval(sunoPollIntervals[songId]);
+                delete sunoPollIntervals[songId];
                 
-                loading.style.display = "none";
-                controls.style.display = "block";
-                
-                // Cập nhật lại list lịch sử nếu đang xem
-                updateHistoryCount();
+                if (songId === currentSongData.id) {
+                    loading.style.display = "none";
+                    controls.style.display = "block";
+                    
+                    // Cập nhật lại list lịch sử nếu đang xem
+                    updateHistoryCount();
+                }
             }
             
         } catch (e) {
-            console.error("Lỗi polling Suno status:", e);
+            console.error("Lỗi polling Suno status cho songId " + songId + ":", e);
         }
     }, 5000); // Polling mỗi 5 giây
 }
+
+let lastRenderedSongId = null;
 
 // Hiển thị danh sách các clips nhạc Suno đã tạo
 function renderSunoClips(clips) {
@@ -1809,52 +1925,48 @@ function renderSunoClips(clips) {
     if (!clips || clips.length === 0) {
         wrapper.style.display = "none";
         container.innerHTML = "";
+        lastRenderedSongId = currentSongData.id;
         return;
     }
     
     wrapper.style.display = "block";
-    container.innerHTML = "";
+    
+    // Nếu chuyển sang bài hát khác, xóa sạch list cũ để vẽ lại từ đầu
+    if (lastRenderedSongId !== currentSongData.id) {
+        container.innerHTML = "";
+        lastRenderedSongId = currentSongData.id;
+    }
+    
+    // Xóa bớt clip không còn trong danh sách mới (nếu có)
+    const clipIdsInList = new Set(clips.map(c => c.id));
+    Array.from(container.children).forEach(child => {
+        const idAttr = child.id || "";
+        if (idAttr.startsWith("suno-clip-")) {
+            const clipId = idAttr.replace("suno-clip-", "");
+            if (!clipIdsInList.has(clipId)) {
+                child.remove();
+            }
+        }
+    });
     
     clips.forEach(clip => {
-        const item = document.createElement("div");
-        item.className = "suno-clip-item";
+        let item = document.getElementById(`suno-clip-${clip.id}`);
+        const isNew = !item;
         
-        let statusText = "Đang chờ";
-        if (clip.status === "complete") statusText = "Hoàn thành";
-        if (clip.status === "streaming") statusText = "Đang tải";
-        if (clip.status === "failed") statusText = "Thất bại";
-        
-        item.innerHTML = `
-            <div class="suno-clip-cover-wrapper">
-                ${clip.imageUrl ? `<img src="${clip.imageUrl}" class="suno-clip-cover" alt="Art">` : `<i data-lucide="music" style="width: 24px; height: 24px; color: var(--text-muted);"></i>`}
-            </div>
-            <div class="suno-clip-info">
-                <div class="suno-clip-title" title="${escapeHTML(clip.title || 'Bài nhạc Suno')}">${escapeHTML(clip.title || 'Bài nhạc Suno')}</div>
-                ${clip.accountEmail ? `<div class="suno-clip-account" style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 2px;"><i data-lucide="user" style="width: 11px; height: 11px;"></i> ${escapeHTML(clip.accountEmail)}</div>` : ''}
-                <div class="suno-clip-status status-${clip.status || 'queued'}" style="margin-top: 4px;">${statusText}</div>
-                
-                ${clip.status === 'complete' && clip.audioUrl ? `
-                    <div class="suno-clip-player-wrapper">
-                        <audio src="${clip.audioUrl}" controls class="suno-clip-audio"></audio>
-                        <div class="suno-clip-actions" id="actions-${clip.id}">
-                            <a href="/api/suno/download?url=${encodeURIComponent(clip.audioUrl)}&name=${encodeURIComponent((currentSongData.title || clip.title || 'music').trim())}" target="_blank" class="suno-clip-btn suno-clip-btn-primary">
-                                <i data-lucide="download"></i> Tải MP3
-                            </a>
-                            ${clip.videoUrl ? `
-                                <a href="${clip.videoUrl}" target="_blank" class="suno-clip-btn">
-                                    <i data-lucide="external-link"></i> Xem Video
-                                </a>
-                            ` : ''}
-                            ${clip.driveUrl ? `
-                                <a href="${clip.driveUrl}" target="_blank" class="suno-clip-btn suno-clip-btn-drive">
-                                    <i data-lucide="hard-drive"></i> Mở Drive
-                                </a>
-                            ` : `
-                                <button type="button" class="suno-clip-btn" onclick="publishToDrive('${clip.id}', '${escapeHTML(clip.audioUrl)}', this)">
-                                    <i data-lucide="cloud-upload"></i> Đăng lên Drive
-                                </button>
-                            `}
-                        </div>
+        if (isNew) {
+            item = document.createElement("div");
+            item.id = `suno-clip-${clip.id}`;
+            item.className = "suno-clip-item";
+            item.innerHTML = `
+                <div class="suno-clip-cover-wrapper"></div>
+                <div class="suno-clip-info">
+                    <div class="suno-clip-title"></div>
+                    <div class="suno-clip-account" style="font-size: 0.72rem; color: var(--text-muted); display: none; align-items: center; gap: 4px; margin-top: 2px;"></div>
+                    <div class="suno-clip-status" style="margin-top: 4px;"></div>
+                    
+                    <div class="suno-clip-player-wrapper" style="display: none; margin-top: 8px;">
+                        <audio controls class="suno-clip-audio" style="width: 100%;"></audio>
+                        <div class="suno-clip-actions" id="actions-${clip.id}" style="display: none;"></div>
                         <div class="suno-clip-progress-wrapper" id="progress-wrapper-${clip.id}" style="display: none;">
                             <div class="suno-clip-progress-container">
                                 <div class="suno-clip-progress-header">
@@ -1870,13 +1982,123 @@ function renderSunoClips(clips) {
                             </div>
                         </div>
                     </div>
-                ` : ''}
-            </div>
-        `;
-        container.appendChild(item);
+                </div>
+            `;
+            container.appendChild(item);
+        }
+        
+        // 1. Cập nhật ảnh bìa (Cover Image)
+        const coverWrapper = item.querySelector(".suno-clip-cover-wrapper");
+        if (clip.imageUrl) {
+            const currentImg = coverWrapper.querySelector("img");
+            if (!currentImg || currentImg.src !== clip.imageUrl) {
+                coverWrapper.innerHTML = `<img src="${clip.imageUrl}" class="suno-clip-cover" alt="Art">`;
+            }
+        } else {
+            const currentIcon = coverWrapper.querySelector("i");
+            if (!currentIcon) {
+                coverWrapper.innerHTML = `<i data-lucide="music" style="width: 24px; height: 24px; color: var(--text-muted);"></i>`;
+                if (window.lucide) window.lucide.createIcons({ node: coverWrapper });
+            }
+        }
+        
+        // 2. Cập nhật tiêu đề (Title)
+        const titleEl = item.querySelector(".suno-clip-title");
+        const formattedTitle = clip.title || 'Bài nhạc Suno';
+        if (titleEl.textContent !== formattedTitle) {
+            titleEl.textContent = formattedTitle;
+            titleEl.title = formattedTitle;
+        }
+        
+        // 3. Cập nhật email tài khoản (Account email)
+        const accountEl = item.querySelector(".suno-clip-account");
+        if (clip.accountEmail) {
+            accountEl.style.display = "flex";
+            const expectedHTML = `<i data-lucide="user" style="width: 11px; height: 11px;"></i> ${escapeHTML(clip.accountEmail)}`;
+            if (accountEl.innerHTML !== expectedHTML) {
+                accountEl.innerHTML = expectedHTML;
+                if (window.lucide) window.lucide.createIcons({ node: accountEl });
+            }
+        } else {
+            accountEl.style.display = "none";
+        }
+        
+        // 4. Cập nhật trạng thái hiển thị (Status text và class)
+        let statusText = "Đang chờ";
+        if (clip.status === "complete") statusText = "Hoàn thành";
+        if (clip.status === "streaming") statusText = "Đang phát Stream...";
+        if (clip.status === "failed") statusText = "Thất bại";
+        
+        const statusEl = item.querySelector(".suno-clip-status");
+        if (statusEl.textContent !== statusText) {
+            statusEl.textContent = statusText;
+        }
+        const expectedClass = `suno-clip-status status-${clip.status || 'queued'}`;
+        if (statusEl.className !== expectedClass) {
+            statusEl.className = expectedClass;
+        }
+        
+        // 5. Cập nhật thẻ audio (chỉ hỗ trợ complete và streaming)
+        const playerWrapper = item.querySelector(".suno-clip-player-wrapper");
+        const audioEl = item.querySelector(".suno-clip-audio");
+        const canPlay = (clip.status === "complete" || clip.status === "streaming") && clip.audioUrl;
+        
+        if (canPlay) {
+            playerWrapper.style.display = "block";
+            // So sánh URL tuyệt đối để tránh việc gán lại làm ngắt nhạc đang phát
+            const absoluteAudioUrl = new URL(clip.audioUrl, window.location.href).href;
+            if (audioEl.src !== absoluteAudioUrl) {
+                audioEl.src = clip.audioUrl;
+            }
+        } else {
+            playerWrapper.style.display = "none";
+            if (audioEl.src) {
+                audioEl.src = "";
+            }
+        }
+        
+        // 6. Cập nhật các nút thao tác (chỉ khi clip hoàn thành)
+        const actionsEl = item.querySelector(".suno-clip-actions");
+        if (clip.status === "complete" && clip.audioUrl) {
+            actionsEl.style.display = "flex";
+            
+            const downloadUrl = `/api/suno/download?url=${encodeURIComponent(clip.audioUrl)}&name=${encodeURIComponent((currentSongData.title || clip.title || 'music').trim())}`;
+            const videoHTML = clip.videoUrl ? `
+                <a href="${clip.videoUrl}" target="_blank" class="suno-clip-btn">
+                    <i data-lucide="external-link"></i> Xem Video
+                </a>
+            ` : '';
+            const driveHTML = clip.driveUrl ? `
+                <a href="${clip.driveUrl}" target="_blank" class="suno-clip-btn suno-clip-btn-drive">
+                    <i data-lucide="hard-drive"></i> Mở Drive
+                </a>
+            ` : `
+                <button type="button" class="suno-clip-btn" onclick="publishToDrive('${clip.id}', '${escapeHTML(clip.audioUrl)}', this)">
+                    <i data-lucide="cloud-upload"></i> Đăng lên Drive
+                </button>
+            `;
+            
+            const expectedActionsHTML = `
+                <a href="${downloadUrl}" target="_blank" class="suno-clip-btn suno-clip-btn-primary">
+                    <i data-lucide="download"></i> Tải MP3
+                </a>
+                ${videoHTML}
+                ${driveHTML}
+            `;
+            
+            // Check nếu chưa được render hoặc driveUrl thay đổi thì mới render lại nút bấm
+            const currentDriveBtn = actionsEl.querySelector(".suno-clip-btn-drive");
+            const hasDriveUrl = !!clip.driveUrl;
+            const hadDriveUrl = !!currentDriveBtn;
+            
+            if (actionsEl.innerHTML === "" || hasDriveUrl !== hadDriveUrl) {
+                actionsEl.innerHTML = expectedActionsHTML;
+                if (window.lucide) window.lucide.createIcons({ node: actionsEl });
+            }
+        } else {
+            actionsEl.style.display = "none";
+        }
     });
-    
-    lucide.createIcons();
 }
 
 // Kiểm tra trạng thái đăng nhập hệ thống

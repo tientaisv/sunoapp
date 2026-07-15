@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -136,6 +137,7 @@ type SunoGenerateRequest struct {
 	ModelVersion     string `json:"model_version"`
 	MakeInstrumental bool   `json:"make_instrumental"`
 	AccountEmail     string `json:"account_email"`
+	Cookie           string `json:"cookie"`
 }
 
 type SunoFeedRequest struct {
@@ -145,6 +147,7 @@ type SunoFeedRequest struct {
 	ClipIDs      []string `json:"clip_ids"`
 	SongID       string   `json:"song_id"`
 	AccountEmail string   `json:"account_email"`
+	Cookie       string   `json:"cookie"`
 }
 
 type SunoClipAPIResponse struct {
@@ -240,6 +243,158 @@ func callSunoAPI(method, endpoint string, body []byte, authToken, browserToken, 
 	}
 	
 	return respBytes, nil
+}
+
+func getJWTExpiry(token string) (time.Time, error) {
+	token = strings.TrimPrefix(token, "Bearer ")
+	token = strings.TrimSpace(token)
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return time.Time{}, fmt.Errorf("invalid token format")
+	}
+	payload := parts[1]
+
+	data, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		if l := len(payload) % 4; l > 0 {
+			payload += strings.Repeat("=", 4-l)
+		}
+		data, err = base64.URLEncoding.DecodeString(payload)
+		if err != nil {
+			data, err = base64.StdEncoding.DecodeString(payload)
+			if err != nil {
+				return time.Time{}, err
+			}
+		}
+	}
+
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(data, &claims); err != nil {
+		return time.Time{}, err
+	}
+
+	return time.Unix(claims.Exp, 0), nil
+}
+
+func refreshSunoToken(cookie string) (string, error) {
+	if cookie == "" {
+		return "", fmt.Errorf("cookie is empty")
+	}
+
+	clerkClientURL := "https://auth.suno.com/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.117.0"
+	req1, err := http.NewRequest("GET", clerkClientURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req1.Header.Set("Cookie", cookie)
+	req1.Header.Set("Origin", "https://suno.com")
+	req1.Header.Set("Referer", "https://suno.com/")
+	req1.Header.Set("Accept", "*/*")
+	req1.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp1, err := client.Do(req1)
+	if err != nil {
+		return "", fmt.Errorf("error calling Clerk client API: %w", err)
+	}
+	defer resp1.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp1.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp1.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("clerk client API returned status %d: %s", resp1.StatusCode, string(bodyBytes))
+	}
+
+	var clientData struct {
+		Response struct {
+			LastActiveSessionID string `json:"last_active_session_id"`
+		} `json:"response"`
+		Client struct {
+			LastActiveSessionID string `json:"last_active_session_id"`
+		} `json:"client"`
+	}
+
+	if err := json.Unmarshal(bodyBytes, &clientData); err != nil {
+		return "", fmt.Errorf("error parsing Clerk client data: %w", err)
+	}
+
+	sessionID := clientData.Response.LastActiveSessionID
+	if sessionID == "" {
+		sessionID = clientData.Client.LastActiveSessionID
+	}
+
+	if sessionID == "" {
+		return "", fmt.Errorf("no active session found in Clerk response: %s", string(bodyBytes))
+	}
+
+	tokenURL := fmt.Sprintf("https://auth.suno.com/v1/client/sessions/%s/tokens?__clerk_api_version=2025-11-10&_clerk_js_version=5.117.0", sessionID)
+	req2, err := http.NewRequest("POST", tokenURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req2.Header.Set("Cookie", cookie)
+	req2.Header.Set("Origin", "https://suno.com")
+	req2.Header.Set("Referer", "https://suno.com/")
+	req2.Header.Set("Accept", "*/*")
+	req2.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp2, err := client.Do(req2)
+	if err != nil {
+		return "", fmt.Errorf("error calling Clerk token API: %w", err)
+	}
+	defer resp2.Body.Close()
+
+	bodyBytes2, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp2.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("clerk token API returned status %d: %s", resp2.StatusCode, string(bodyBytes2))
+	}
+
+	var tokenData struct {
+		JWT string `json:"jwt"`
+	}
+	if err := json.Unmarshal(bodyBytes2, &tokenData); err != nil {
+		return "", fmt.Errorf("error parsing Clerk token data: %w", err)
+	}
+
+	if tokenData.JWT == "" {
+		return "", fmt.Errorf("empty JWT returned from Clerk: %s", string(bodyBytes2))
+	}
+
+	return "Bearer " + tokenData.JWT, nil
+}
+
+func getOrRefreshSunoToken(authToken string, cookie string) (string, bool, error) {
+	if cookie == "" {
+		return authToken, false, nil
+	}
+
+	expiry, err := getJWTExpiry(authToken)
+	if err != nil {
+		newToken, refreshErr := refreshSunoToken(cookie)
+		if refreshErr != nil {
+			return authToken, false, fmt.Errorf("token invalid and refresh failed: %v", refreshErr)
+		}
+		return newToken, true, nil
+	}
+
+	if time.Until(expiry) < 45*time.Second {
+		newToken, refreshErr := refreshSunoToken(cookie)
+		if refreshErr != nil {
+			return authToken, false, fmt.Errorf("token expiring soon and refresh failed: %v", refreshErr)
+		}
+		return newToken, true, nil
+	}
+
+	return authToken, false, nil
 }
 
 func mergeClips(existing []storage.SunoClip, newClips []storage.SunoClip) []storage.SunoClip {
@@ -358,7 +513,31 @@ func main() {
 			return
 		}
 
+		tokenRefreshed := false
+		
+		// 1. Initial check & refresh if expiring soon
+		currentAuthToken, refreshed, err := getOrRefreshSunoToken(req.AuthToken, req.Cookie)
+		if err == nil && refreshed {
+			req.AuthToken = currentAuthToken
+			tokenRefreshed = true
+		}
+
+		// 2. Call Suno API
 		respBytes, err := callSunoAPI("POST", "https://studio-api-prod.suno.com/api/generate/v2-web/", payloadBytes, req.AuthToken, req.BrowserToken, req.DeviceID)
+		
+		// 3. Retry if 401 and cookie exists
+		if err != nil && req.Cookie != "" && strings.Contains(err.Error(), "status 401") {
+			log.Println("Suno API trả về 401. Thực hiện ép buộc làm mới token và thử lại...")
+			newToken, refreshErr := refreshSunoToken(req.Cookie)
+			if refreshErr == nil {
+				req.AuthToken = newToken
+				tokenRefreshed = true
+				respBytes, err = callSunoAPI("POST", "https://studio-api-prod.suno.com/api/generate/v2-web/", payloadBytes, req.AuthToken, req.BrowserToken, req.DeviceID)
+			} else {
+				log.Printf("Ép buộc làm mới token thất bại: %v", refreshErr)
+			}
+		}
+
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -372,7 +551,6 @@ func main() {
 
 		var sunoResp SunoGenerateAPIResponse
 		if err := json.Unmarshal(respBytes, &sunoResp); err != nil {
-			// Thử unmarshal dạng mảng trực tiếp đề phòng
 			var clips []SunoClipAPIResponse
 			if err2 := json.Unmarshal(respBytes, &clips); err2 == nil {
 				sunoResp.Clips = clips
@@ -391,7 +569,6 @@ func main() {
 			return
 		}
 
-		// Cập nhật bài hát gốc nếu có song_id
 		if req.SongID != "" {
 			song, err := mgr.Get(req.SongID)
 			if err == nil {
@@ -404,9 +581,18 @@ func main() {
 			}
 		}
 
+		var clientResp struct {
+			Clips        []SunoClipAPIResponse `json:"clips"`
+			NewAuthToken string                `json:"new_auth_token,omitempty"`
+		}
+		clientResp.Clips = sunoResp.Clips
+		if tokenRefreshed {
+			clientResp.NewAuthToken = req.AuthToken
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(respBytes)
+		json.NewEncoder(w).Encode(clientResp)
 	})
 
 	// Route API polling trạng thái bài hát từ Suno
@@ -457,7 +643,31 @@ func main() {
 			return
 		}
 
+		tokenRefreshed := false
+
+		// 1. Initial check & refresh if expiring soon
+		currentAuthToken, refreshed, err := getOrRefreshSunoToken(req.AuthToken, req.Cookie)
+		if err == nil && refreshed {
+			req.AuthToken = currentAuthToken
+			tokenRefreshed = true
+		}
+
+		// 2. Call Suno API
 		respBytes, err := callSunoAPI("POST", "https://studio-api-prod.suno.com/api/feed/v3", payloadBytes, req.AuthToken, req.BrowserToken, req.DeviceID)
+
+		// 3. Retry if 401 and cookie exists
+		if err != nil && req.Cookie != "" && strings.Contains(err.Error(), "status 401") {
+			log.Println("Suno API feed trả về 401. Thực hiện ép buộc làm mới token và thử lại...")
+			newToken, refreshErr := refreshSunoToken(req.Cookie)
+			if refreshErr == nil {
+				req.AuthToken = newToken
+				tokenRefreshed = true
+				respBytes, err = callSunoAPI("POST", "https://studio-api-prod.suno.com/api/feed/v3", payloadBytes, req.AuthToken, req.BrowserToken, req.DeviceID)
+			} else {
+				log.Printf("Ép buộc làm mới token thất bại: %v", refreshErr)
+			}
+		}
+
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -497,9 +707,57 @@ func main() {
 			}
 		}
 
+		var clientResp struct {
+			Clips        []SunoClipAPIResponse `json:"clips"`
+			NewAuthToken string                `json:"new_auth_token,omitempty"`
+		}
+		clientResp.Clips = apiClips
+		if tokenRefreshed {
+			clientResp.NewAuthToken = req.AuthToken
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(respBytes)
+		json.NewEncoder(w).Encode(clientResp)
+	})
+
+	// Route API làm mới token từ Cookie
+	mux.HandleFunc("/api/suno/refresh", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Phương thức không được hỗ trợ", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			Cookie string `json:"cookie"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Dữ liệu yêu cầu không hợp lệ: " + err.Error()})
+			return
+		}
+
+		if req.Cookie == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Thiếu Cookie tài khoản để làm mới"})
+			return
+		}
+
+		newToken, err := refreshSunoToken(req.Cookie)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Lỗi làm mới token: " + err.Error()})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"new_auth_token": newToken,
+		})
 	})
 
 	// Route API sáng tác nhạc
