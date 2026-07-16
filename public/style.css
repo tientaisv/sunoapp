@@ -4,16 +4,20 @@
     --bg-card: rgba(30, 41, 59, 0.7);
     --border-color: rgba(255, 255, 255, 0.08);
     --border-color-active: rgba(251, 191, 36, 0.4);
-    
+
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
-    
-    --color-primary: #3b82f6; /* Blue */
-    --color-success: #10b981; /* Green */
-    --color-warning: #fbbf24; /* Gold/Amber */
-    --color-danger: #ef4444; /* Red */
-    
+
+    --color-primary: #3b82f6;
+    /* Blue */
+    --color-success: #10b981;
+    /* Green */
+    --color-warning: #fbbf24;
+    /* Gold/Amber */
+    --color-danger: #ef4444;
+    /* Red */
+
     --font-header: 'Outfit', sans-serif;
     --font-body: 'Plus Jakarta Sans', sans-serif;
     --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -38,7 +42,8 @@ body {
 }
 
 /* Glowing Background Blobs */
-.glow-bg-1, .glow-bg-2 {
+.glow-bg-1,
+.glow-bg-2 {
     position: fixed;
     width: 600px;
     height: 600px;
@@ -66,13 +71,16 @@ body {
     width: 8px;
     height: 8px;
 }
+
 ::-webkit-scrollbar-track {
     background: rgba(15, 23, 42, 0.3);
 }
+
 ::-webkit-scrollbar-thumb {
     background: rgba(148, 163, 184, 0.3);
     border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(148, 163, 184, 0.5);
 }
@@ -179,6 +187,40 @@ body {
 @media (max-width: 1024px) {
     .app-content {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Desktop layout: align result-panel height with left cards, not with suggestions & submit button */
+@media (min-width: 1025px) {
+    .config-panel {
+        display: contents;
+    }
+
+    .config-panel>.section-card:nth-of-type(1) {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .config-panel>.section-card:nth-of-type(2) {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .config-panel>.quick-suggestions {
+        grid-column: 1;
+        grid-row: 3;
+    }
+
+    .config-panel>.btn-submit {
+        grid-column: 1;
+        grid-row: 4;
+    }
+
+    .result-panel {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        /* Stretch across Card 1 and Card 2 only */
+        min-height: 0;
     }
 }
 
@@ -359,35 +401,43 @@ textarea:focus {
 
 /* Specialized color mapping for Catholic buttons */
 #catholicDegree .btn-item.active {
-    background: #dc2626; /* Đậm chất Công Giáo - Đỏ giống ảnh mẫu */
+    background: #dc2626;
+    /* Đậm chất Công Giáo - Đỏ giống ảnh mẫu */
     box-shadow: 0 2px 10px rgba(220, 38, 38, 0.3);
 }
+
 #catholicDegree .btn-item:nth-child(2).active {
-    background: #475569; /* Thoáng nhẹ - Xám */
+    background: #475569;
+    /* Thoáng nhẹ - Xám */
     box-shadow: 0 2px 10px rgba(71, 85, 105, 0.3);
 }
+
 #catholicDegree .btn-item:nth-child(3).active {
-    background: #334155; /* Đời thường - Xám đậm */
+    background: #334155;
+    /* Đời thường - Xám đậm */
     box-shadow: 0 2px 10px rgba(51, 65, 85, 0.3);
 }
 
 /* Verses active color */
 #verses .btn-item.active {
-    background: #fbbf24; /* Vàng giống ảnh mẫu */
+    background: #fbbf24;
+    /* Vàng giống ảnh mẫu */
     color: #0b0f19;
     box-shadow: 0 2px 10px rgba(251, 191, 36, 0.3);
 }
 
 /* High/Mid/Low active color */
 #chorusPitch .btn-item.active {
-    background: #fbbf24; /* Vàng */
+    background: #fbbf24;
+    /* Vàng */
     color: #0b0f19;
     box-shadow: 0 2px 10px rgba(251, 191, 36, 0.3);
 }
 
 /* Voice style color */
 #voiceStyle .chip-item.active {
-    background: #ec4899; /* Hồng */
+    background: #ec4899;
+    /* Hồng */
     color: #fff;
     border-color: transparent;
     box-shadow: 0 2px 10px rgba(236, 72, 153, 0.3);
@@ -395,7 +445,8 @@ textarea:focus {
 
 /* Tempo style color */
 #tempo .btn-item.active {
-    background: #4f46e5; /* Tím xanh */
+    background: #4f46e5;
+    /* Tím xanh */
     color: #fff;
     box-shadow: 0 2px 10px rgba(79, 70, 229, 0.3);
 }
@@ -522,7 +573,7 @@ textarea:focus {
         align-items: stretch;
         gap: 12px;
     }
-    
+
     .color-picker-wrapper {
         justify-content: space-between;
     }
@@ -561,11 +612,11 @@ textarea:focus {
     transition: var(--transition-fast);
 }
 
-.checkbox-container:hover input ~ .checkmark {
+.checkbox-container:hover input~.checkmark {
     border-color: var(--color-primary);
 }
 
-.checkbox-container input:checked ~ .checkmark {
+.checkbox-container input:checked~.checkmark {
     background-color: var(--color-primary);
     border-color: var(--color-primary);
 }
@@ -576,7 +627,7 @@ textarea:focus {
     display: none;
 }
 
-.checkbox-container input:checked ~ .checkmark:after {
+.checkbox-container input:checked~.checkmark:after {
     display: block;
 }
 
@@ -699,7 +750,8 @@ textarea:focus {
 }
 
 /* Result Panel Display */
-.empty-state, .loading-state {
+.empty-state,
+.loading-state {
     background: var(--bg-card);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -733,13 +785,15 @@ textarea:focus {
     height: 32px;
 }
 
-.empty-state h3, .loading-state h3 {
+.empty-state h3,
+.loading-state h3 {
     font-family: var(--font-header);
     font-size: 1.25rem;
     font-weight: 600;
 }
 
-.empty-state p, .loading-state p {
+.empty-state p,
+.loading-state p {
     font-size: 0.88rem;
     color: var(--text-secondary);
     max-width: 360px;
@@ -760,15 +814,41 @@ textarea:focus {
     animation: bounce 1.2s ease-in-out infinite;
 }
 
-.music-wave span:nth-child(1) { height: 10px; animation-delay: -1.0s; }
-.music-wave span:nth-child(2) { height: 25px; animation-delay: -0.8s; }
-.music-wave span:nth-child(3) { height: 40px; animation-delay: -0.6s; }
-.music-wave span:nth-child(4) { height: 18px; animation-delay: -0.4s; }
-.music-wave span:nth-child(5) { height: 30px; animation-delay: -0.2s; }
+.music-wave span:nth-child(1) {
+    height: 10px;
+    animation-delay: -1.0s;
+}
+
+.music-wave span:nth-child(2) {
+    height: 25px;
+    animation-delay: -0.8s;
+}
+
+.music-wave span:nth-child(3) {
+    height: 40px;
+    animation-delay: -0.6s;
+}
+
+.music-wave span:nth-child(4) {
+    height: 18px;
+    animation-delay: -0.4s;
+}
+
+.music-wave span:nth-child(5) {
+    height: 30px;
+    animation-delay: -0.2s;
+}
 
 @keyframes bounce {
-    0%, 100% { transform: scaleY(0.3); }
-    50% { transform: scaleY(1); }
+
+    0%,
+    100% {
+        transform: scaleY(0.3);
+    }
+
+    50% {
+        transform: scaleY(1);
+    }
 }
 
 /* Result Container Card Style */
@@ -787,8 +867,15 @@ textarea:focus {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .result-header {
@@ -858,12 +945,12 @@ textarea:focus {
     transition: var(--transition-fast);
 }
 
-.toggle-chords-label input:checked + .toggle-slider {
+.toggle-chords-label input:checked+.toggle-slider {
     background-color: var(--color-primary);
     border-color: var(--color-primary);
 }
 
-.toggle-chords-label input:checked + .toggle-slider:before {
+.toggle-chords-label input:checked+.toggle-slider:before {
     transform: translateX(18px);
     background-color: #fff;
 }
@@ -1037,6 +1124,7 @@ textarea:focus {
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    overflow-y: auto;
 }
 
 .tab-btn {
@@ -1204,7 +1292,7 @@ textarea:focus {
     min-height: 0;
     overflow-y: auto;
     padding-right: 6px;
-    max-height: none;
+    max-height: 2150px;
 }
 
 .history-card {
@@ -1329,15 +1417,17 @@ textarea:focus {
 }
 
 /* Force all stave lines, notes, and texts inside the sheet music to black */
-#abcSheetMusic svg path, 
-#abcSheetMusic svg text, 
+#abcSheetMusic svg path,
+#abcSheetMusic svg text,
 #abcSheetMusic svg rect {
     fill: #000000 !important;
     stroke: #000000 !important;
 }
+
 #abcSheetMusic svg path[fill="none"] {
     fill: none !important;
 }
+
 #abcSheetMusic svg path[stroke="none"] {
     stroke: none !important;
 }
@@ -1786,8 +1876,13 @@ textarea:focus {
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .spin {
@@ -1801,11 +1896,13 @@ textarea:focus {
 }
 
 @media (max-width: 768px) {
+
     /* 1. Base container adjustments */
     body {
-        padding-bottom: 74px; /* Space for sticky bottom tab bar */
+        padding-bottom: 74px;
+        /* Space for sticky bottom tab bar */
     }
-    
+
     .container {
         padding: 12px 10px;
         gap: 16px;
@@ -1829,7 +1926,7 @@ textarea:focus {
         justify-content: space-around;
         align-items: center;
     }
-    
+
     .mobile-nav-item {
         flex: 1;
         background: transparent;
@@ -1848,22 +1945,22 @@ textarea:focus {
         padding: 4px 0;
         border-radius: 8px;
     }
-    
+
     .mobile-nav-item i {
         width: 20px;
         height: 20px;
         transition: transform 0.2s ease;
     }
-    
+
     .mobile-nav-item:active i {
         transform: scale(0.9);
     }
-    
+
     .mobile-nav-item.active {
         color: var(--color-primary);
         text-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
     }
-    
+
     .mobile-nav-item.active i {
         color: var(--color-primary);
         filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.4));
@@ -1875,20 +1972,20 @@ textarea:focus {
         flex-direction: column !important;
         gap: 16px;
     }
-    
+
     .app-content.mobile-show-config .config-panel {
         display: flex !important;
     }
-    
+
     .app-content.mobile-show-config .result-panel {
         display: none !important;
     }
-    
+
     .app-content.mobile-show-result .config-panel,
     .app-content.mobile-show-history .config-panel {
         display: none !important;
     }
-    
+
     .app-content.mobile-show-result .result-panel,
     .app-content.mobile-show-history .result-panel {
         display: flex !important;
@@ -1902,44 +1999,44 @@ textarea:focus {
         padding: 14px 16px;
         border-radius: 12px;
     }
-    
+
     .logo-area {
         justify-content: center;
         text-align: center;
         flex-direction: column;
         gap: 8px;
     }
-    
+
     .logo-icon {
         width: 40px;
         height: 40px;
         border-radius: 10px;
     }
-    
+
     .logo-icon i {
         width: 20px;
         height: 20px;
     }
-    
+
     .app-header h1 {
         font-size: 1.35rem;
     }
-    
+
     .subtitle {
         font-size: 0.78rem;
     }
-    
+
     /* Hide text badges to avoid clutter */
     .app-header .badge {
         display: none !important;
     }
-    
+
     .header-badges {
         justify-content: center;
         width: 100%;
         gap: 8px;
     }
-    
+
     .header-badges button {
         flex: 1;
         justify-content: center;
@@ -1954,7 +2051,7 @@ textarea:focus {
         gap: 16px;
         border-radius: 12px;
     }
-    
+
     .section-title {
         font-size: 1.05rem;
         padding-bottom: 10px;
@@ -1965,31 +2062,32 @@ textarea:focus {
         grid-template-columns: 1fr !important;
         gap: 12px;
     }
-    
+
     .btn-group {
         width: 100% !important;
         display: flex;
     }
-    
+
     .btn-item {
         flex: 1;
         text-align: center;
         padding: 8px 6px;
         font-size: 0.8rem;
     }
-    
+
     /* Auto-wrap button groups that have long text on tiny devices */
     #catholicDegree {
         flex-direction: column;
         width: 100%;
         background: rgba(15, 23, 42, 0.2);
     }
+
     #catholicDegree .btn-item {
         width: 100%;
         border-radius: 8px;
         margin: 2px 0;
     }
-    
+
     .custom-color-area {
         flex-direction: column;
         align-items: stretch;
@@ -2002,12 +2100,12 @@ textarea:focus {
         gap: 16px;
         border-radius: 12px;
     }
-    
+
     .title-display-area {
         padding: 12px 14px;
         margin-bottom: 12px;
     }
-    
+
     .res-title-display {
         font-size: 1.25rem;
     }
@@ -2018,7 +2116,7 @@ textarea:focus {
         gap: 10px;
         padding-bottom: 12px;
     }
-    
+
     .result-actions-top {
         width: 100%;
         display: flex;
@@ -2026,7 +2124,8 @@ textarea:focus {
     }
 
     .result-panel .tabs-header {
-        display: none !important; /* Hidden because mobile bottom nav handles it */
+        display: none !important;
+        /* Hidden because mobile bottom nav handles it */
     }
 
     /* 2-column grid for result editor toggle buttons */
@@ -2036,14 +2135,14 @@ textarea:focus {
         gap: 8px;
         padding: 6px;
     }
-    
+
     .editor-toggle-bar .btn-action {
         width: 100%;
         justify-content: center;
         padding: 8px 10px;
         font-size: 0.78rem;
     }
-    
+
     /* PDF download spans across both columns at the bottom */
     #btnDownloadPDF {
         grid-column: span 2;
@@ -2056,22 +2155,22 @@ textarea:focus {
         gap: 12px;
         padding: 12px;
     }
-    
+
     .suno-clip-cover-wrapper {
         width: 100%;
         height: 140px;
     }
-    
+
     .suno-clip-cover {
         border-radius: 8px;
     }
-    
+
     .suno-clip-actions {
         width: 100%;
         display: flex;
         gap: 8px;
     }
-    
+
     .suno-clip-btn {
         flex: 1;
         justify-content: center;
@@ -2083,23 +2182,23 @@ textarea:focus {
         padding: 12px;
         gap: 10px;
     }
-    
+
     .history-card-header {
         flex-direction: column;
         align-items: stretch;
         gap: 4px;
     }
-    
+
     .history-card-date {
         align-self: flex-start;
         font-size: 0.7rem;
     }
-    
+
     .history-card-actions {
         justify-content: space-between;
         gap: 6px;
     }
-    
+
     .history-card-actions .btn-action {
         flex: 1;
         justify-content: center;
@@ -2114,28 +2213,30 @@ textarea:focus {
         width: 95%;
         border-radius: 16px;
     }
-    
+
     /* Stack config action buttons inside modal */
     #btnImportCookieJson {
         margin-left: 0 !important;
         width: 100%;
         margin-top: 8px;
     }
+
     #btnImportSunoCurl {
         width: 100%;
     }
 }
 
 @media (max-width: 480px) {
+
     /* Even smaller screen adjustments */
     .suno-clip-cover-wrapper {
         height: 110px;
     }
-    
+
     .editor-toggle-bar {
         grid-template-columns: 1fr;
     }
-    
+
     #btnDownloadPDF {
         grid-column: span 1;
     }
