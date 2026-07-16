@@ -1,7 +1,8 @@
 // Khởi chạy Lucide Icons
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     lucide.createIcons();
     initUIHandlers();
+    await fetchSunoAccounts();
     initSunoIntegration();
     checkAuthStatus();
 });
@@ -155,6 +156,20 @@ function initUIHandlers() {
             // Nếu mở tab Lịch sử, tải lại danh sách
             if (tabTarget === "history-library") {
                 loadHistory();
+            }
+
+            // Đồng bộ sang mobile bottom navigation
+            const appContent = document.querySelector(".app-content");
+            if (appContent) {
+                if (tabTarget === "current-song") {
+                    appContent.classList.remove("mobile-show-config", "mobile-show-history");
+                    appContent.classList.add("mobile-show-result");
+                    updateMobileTabActive("result");
+                } else if (tabTarget === "history-library") {
+                    appContent.classList.remove("mobile-show-config", "mobile-show-result");
+                    appContent.classList.add("mobile-show-history");
+                    updateMobileTabActive("history");
+                }
             }
         });
     });
@@ -311,6 +326,9 @@ function initUIHandlers() {
 
     // Tải trước số lượng bài hát đã sáng tác
     updateHistoryCount();
+
+    // Khởi tạo điều hướng trên thiết bị di động
+    initMobileNavigation();
 }
 
 // Thiết lập chọn nhiều nút trong group (Cho phép chọn nhiều)
@@ -436,6 +454,14 @@ async function handleCompose(mode, extraParam) {
     document.getElementById("resultContainer").style.display = "none";
     document.getElementById("loadingState").style.display = "flex";
     document.getElementById("composeBtn").disabled = true;
+
+    // Tự động chuyển sang Tab Kết quả trên di động để thấy trạng thái loading
+    const appContent = document.querySelector(".app-content");
+    if (appContent) {
+        appContent.classList.remove("mobile-show-config", "mobile-show-history");
+        appContent.classList.add("mobile-show-result");
+        updateMobileTabActive("result");
+    }
     
     // Tùy biến text loading
     let loadingText = "Đang sáng tác...";
@@ -895,6 +921,14 @@ async function loadSongConfig(id) {
             currentSongTabBtn.click();
         }
 
+        // Tự động chuyển sang Tab Sáng tác trên di động vì họ đã nạp cấu hình để sửa đổi
+        const appContent = document.querySelector(".app-content");
+        if (appContent) {
+            appContent.classList.remove("mobile-show-result", "mobile-show-history");
+            appContent.classList.add("mobile-show-config");
+            updateMobileTabActive("config");
+        }
+
         // Highlight nhẹ textarea để báo hiệu đã load
         const topicArea = document.getElementById("topic");
         topicArea.style.boxShadow = "0 0 15px var(--color-primary)";
@@ -1238,11 +1272,102 @@ function initSunoIntegration() {
             renderSunoAccounts();
             updateSunoUIState();
             alert("Đã thêm tài khoản từ cURL thành công!");
+        } else if (config.cookie) {
+            // Nếu chỉ có cookie (ví dụ cURL từ clerk.suno.com), cập nhật cho tài khoản hiện tại
+            const accounts = getSunoAccounts();
+            if (accounts.length > 0) {
+                const currentIndex = parseInt(localStorage.getItem("suno_current_account_index") || "0", 10) % accounts.length;
+                accounts[currentIndex].cookie = config.cookie;
+                saveSunoAccounts(accounts);
+                document.getElementById("sunoCurlInput").value = "";
+                renderSunoAccounts();
+                alert(`Đã cập nhật Cookie thành công cho tài khoản: ${accounts[currentIndex].email}!`);
+            } else {
+                alert("Chưa có tài khoản nào. Vui lòng thêm cURL có chứa Authorization token trước.");
+            }
         } else {
-            alert("Không tìm thấy thông tin Authorization Bearer token trong lệnh cURL. Vui lòng kiểm tra lại lệnh cURL của bạn.");
+            alert("Không tìm thấy thông tin Authorization Bearer token hoặc Cookie trong lệnh cURL. Vui lòng kiểm tra lại lệnh cURL của bạn.");
         }
     });
     
+    const btnImportCookieJson = document.getElementById("btnImportCookieJson");
+    const sunoCookieJsonInput = document.getElementById("sunoCookieJsonInput");
+
+    if (btnImportCookieJson && sunoCookieJsonInput) {
+        btnImportCookieJson.addEventListener("click", () => {
+            sunoCookieJsonInput.click();
+        });
+
+        sunoCookieJsonInput.addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const cookies = JSON.parse(event.target.result);
+                    if (!Array.isArray(cookies)) {
+                        throw new Error("Định dạng JSON không hợp lệ. Phải là một mảng Cookie.");
+                    }
+
+                    const cookieStr = cookies
+                        .filter(c => c.name === '__client' || c.name === '__client_uat')
+                        .map(c => `${c.name}=${c.value}`)
+                        .join('; ');
+
+                    if (!cookieStr) {
+                        alert("Không tìm thấy Cookie __client nào trong file JSON.");
+                        return;
+                    }
+
+                    // Cải tiến: Dùng cookie gọi API để lấy luôn JWT mới thay vì chỉ cập nhật
+                    const btnImportCookieJson = document.getElementById("btnImportCookieJson");
+                    const originalHtml = btnImportCookieJson.innerHTML;
+                    btnImportCookieJson.innerHTML = `<i data-lucide="loader" class="spin" style="width: 14px; height: 14px;"></i> Đang lấy Token...`;
+                    btnImportCookieJson.disabled = true;
+                    lucide.createIcons();
+
+                    try {
+                        const response = await fetch("/api/suno/refresh", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ cookie: cookieStr })
+                        });
+                        
+                        const data = await response.json();
+                        if (!response.ok) {
+                            throw new Error(data.error || "Lỗi không xác định khi làm mới token");
+                        }
+
+                        // Đã lấy được JWT mới từ cookie
+                        const newJwt = data.new_auth_token;
+                        const newCookieStr = data.new_cookie || cookieStr;
+                        
+                        addSunoAccount({
+                            authToken: newJwt,
+                            cookie: newCookieStr
+                        });
+                        
+                        renderSunoAccounts();
+                        updateSunoUIState();
+                        alert("Tuyệt vời! Đã tự động tạo/cập nhật tài khoản hoàn chỉnh chỉ từ file Cookie JSON.");
+                    } catch (apiErr) {
+                        alert("Lỗi khi dùng Cookie lấy JWT: " + apiErr.message);
+                    } finally {
+                        btnImportCookieJson.innerHTML = originalHtml;
+                        btnImportCookieJson.disabled = false;
+                        lucide.createIcons();
+                    }
+                } catch (err) {
+                    alert("Lỗi đọc file JSON: " + err.message);
+                }
+                
+                sunoCookieJsonInput.value = "";
+            };
+            reader.readAsText(file);
+        });
+    }
+
     // Thêm tài khoản thủ công từ Form
     if (btnManualAdd) btnManualAdd.addEventListener("click", () => {
         const auth = document.getElementById("cfgAuthToken").value.trim();
@@ -1292,11 +1417,13 @@ function initSunoIntegration() {
 function parseSunoCurl(curlText) {
     const config = {};
     
-    // Tìm các header -H
-    const hRegex = /-H\s+(['"])([^'"]+)\1/gi;
+    // Tìm các header -H hoặc --header, hỗ trợ cả prefix $ và dấu nháy phức tạp
+    const hRegex = /(?:-H|--header)\s+[\$]?(?:(['"])(.*?)\1|([^\s'"]+))/gi;
     let match;
     while ((match = hRegex.exec(curlText)) !== null) {
-        const headerValue = match[2];
+        const headerValue = match[2] || match[3];
+        if (!headerValue) continue;
+        
         const colonIndex = headerValue.indexOf(':');
         if (colonIndex > -1) {
             const key = headerValue.substring(0, colonIndex).trim().toLowerCase();
@@ -1314,79 +1441,112 @@ function parseSunoCurl(curlText) {
     }
     
     // Tìm phần body dữ liệu (bắt đầu tìm từ vị trí của --data để tránh lấy nhầm JSON trong header browser-token)
-    let startSearchIndex = 0;
     const dataIndex = curlText.search(/--data(-raw|-binary)?/i);
     if (dataIndex > -1) {
-        startSearchIndex = dataIndex;
-    }
-    const startBrace = curlText.indexOf('{', startSearchIndex);
-    const endBrace = curlText.lastIndexOf('}');
-    if (startBrace > -1 && endBrace > startBrace) {
-        const rawJson = curlText.substring(startBrace, endBrace + 1);
-        try {
-            let cleanedJson = rawJson.replace(/\\'/g, "'").replace(/\\"/g, '"');
-            // Thử parse JSON trực tiếp
+        const startSearchIndex = dataIndex;
+        const startBrace = curlText.indexOf('{', startSearchIndex);
+        const endBrace = curlText.lastIndexOf('}');
+        if (startBrace > -1 && endBrace > startBrace) {
+            const rawJson = curlText.substring(startBrace, endBrace + 1);
             try {
-                const parsedData = JSON.parse(rawJson);
-                if (parsedData.token) config.sunoToken = parsedData.token;
-                if (parsedData.metadata) {
-                    config.userTier = parsedData.metadata.user_tier;
-                    config.createSessionToken = parsedData.metadata.create_session_token;
+                let cleanedJson = rawJson.replace(/\\'/g, "'").replace(/\\"/g, '"');
+                // Thử parse JSON trực tiếp
+                try {
+                    const parsedData = JSON.parse(rawJson);
+                    if (parsedData.token) config.sunoToken = parsedData.token;
+                    if (parsedData.metadata) {
+                        config.userTier = parsedData.metadata.user_tier;
+                        config.createSessionToken = parsedData.metadata.create_session_token;
+                    }
+                } catch (e) {
+                    // Parse JSON đã dọn dẹp dấu nháy
+                    const parsedData = JSON.parse(cleanedJson);
+                    if (parsedData.token) config.sunoToken = parsedData.token;
+                    if (parsedData.metadata) {
+                        config.userTier = parsedData.metadata.user_tier;
+                        config.createSessionToken = parsedData.metadata.create_session_token;
+                    }
                 }
             } catch (e) {
-                // Parse JSON đã dọn dẹp dấu nháy
-                const parsedData = JSON.parse(cleanedJson);
-                if (parsedData.token) config.sunoToken = parsedData.token;
-                if (parsedData.metadata) {
-                    config.userTier = parsedData.metadata.user_tier;
-                    config.createSessionToken = parsedData.metadata.create_session_token;
-                }
+                console.error("Lỗi phân tích cú pháp body JSON cURL:", e);
             }
-        } catch (e) {
-            console.error("Lỗi phân tích cú pháp body JSON cURL:", e);
         }
     }
     
     return config;
 }
 
-// Quản lý tài khoản trong LocalStorage
+// Quản lý tài khoản trên Server (Sync & Local Cache)
+let localSunoAccounts = [];
+
+async function fetchSunoAccounts() {
+    try {
+        const res = await fetch("/api/accounts");
+        if (res.ok) {
+            localSunoAccounts = await res.json();
+            if (!localSunoAccounts) localSunoAccounts = [];
+        }
+    } catch (e) {
+        console.error("Lỗi đồng bộ tài khoản từ server:", e);
+    }
+}
+
 function getSunoAccounts() {
+    return localSunoAccounts;
+}
+
+async function saveSunoAccountToServer(acc) {
     try {
-        const val = localStorage.getItem("suno_accounts");
-        return val ? JSON.parse(val) : [];
+        await fetch("/api/accounts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(acc)
+        });
     } catch (e) {
-        console.error("Lỗi đọc danh sách tài khoản:", e);
-        return [];
+        console.error("Lỗi lưu tài khoản lên server:", e);
     }
 }
 
-function saveSunoAccounts(accounts) {
-    try {
-        localStorage.setItem("suno_accounts", JSON.stringify(accounts));
-    } catch (e) {
-        console.error("Lỗi ghi danh sách tài khoản:", e);
+async function saveSunoAccounts(accounts) {
+    // Lặp qua mảng lưu từng tài khoản lên server nếu cần tương thích
+    for (const acc of accounts) {
+        await saveSunoAccountToServer(acc);
     }
+    localSunoAccounts = accounts;
 }
 
-function updateStoredSunoToken(email, newAuthToken) {
-    if (!newAuthToken || !email) return;
+async function updateStoredSunoToken(email, newAuthToken, newCookie) {
+    if (!email) return;
     let accounts = getSunoAccounts();
     const idx = accounts.findIndex(acc => acc.email === email);
     if (idx > -1) {
-        accounts[idx].authToken = newAuthToken;
-        const jwtDecoded = decodeJWT(newAuthToken);
-        if (jwtDecoded && jwtDecoded.exp) {
-            accounts[idx].expiry = jwtDecoded.exp * 1000;
+        let changed = false;
+        if (newAuthToken && accounts[idx].authToken !== newAuthToken) {
+            accounts[idx].authToken = newAuthToken;
+            const jwtDecoded = decodeJWT(newAuthToken);
+            if (jwtDecoded && jwtDecoded.exp) {
+                accounts[idx].expiry = jwtDecoded.exp * 1000;
+            }
+            changed = true;
         }
-        saveSunoAccounts(accounts);
-        renderSunoAccounts();
-        updateSunoUIState();
-        console.log(`Đã tự động gia hạn token cho tài khoản: ${email}`);
+        if (newCookie && accounts[idx].cookie !== newCookie) {
+            accounts[idx].cookie = newCookie;
+            changed = true;
+            console.log(`Đã tự động cập nhật cookie mới cho tài khoản: ${email}`);
+        }
+        if (changed) {
+            // Cập nhật memory ngay
+            localSunoAccounts = accounts;
+            // Đồng bộ lên server bất đồng bộ (không block UI)
+            saveSunoAccountToServer(accounts[idx]);
+            renderSunoAccounts();
+            updateSunoUIState();
+            console.log(`Đã tự động gia hạn token cho tài khoản: ${email}`);
+        }
     }
 }
 
-function addSunoAccount(config) {
+async function addSunoAccount(config) {
     let accounts = getSunoAccounts();
     
     // Giải mã JWT để lấy email và expiry
@@ -1397,39 +1557,64 @@ function addSunoAccount(config) {
     if (jwtDecoded) {
         email = jwtDecoded["suno.com/claims/email"] || jwtDecoded["https://suno.ai/claims/email"] || jwtDecoded["suno/username"] || "Tài khoản Suno";
         if (jwtDecoded.exp) {
-            exp = jwtDecoded.exp * 1000; // Đổi sang ms
+            exp = jwtDecoded.exp * 1000;
         }
     }
     
-    const newAcc = {
-        id: "acc_" + Date.now(),
-        email: email,
-        authToken: config.authToken,
-        browserToken: config.browserToken || "",
-        deviceId: config.deviceId || "",
-        cookie: config.cookie || "",
-        userTier: config.userTier || "4497580c-f4eb-4f86-9f0e-960eb7c48d7d",
-        createSessionToken: config.createSessionToken || "3d8d709b-97f1-4867-acfb-a014c499b58d",
-        bodyToken: config.sunoToken || "",
-        expiry: exp,
-        addedAt: Date.now()
-    };
+    // Lấy lại các thông tin cũ nếu có (để không bị mất khi dán cURL generate)
+    let oldCookie = "";
+    let oldBrowserToken = "";
+    let oldDeviceId = "";
+    let oldUserTier = "4497580c-f4eb-4f86-9f0e-960eb7c48d7d";
+    let oldSessionToken = "3d8d709b-97f1-4867-acfb-a014c499b58d";
     
-    // Tránh trùng lặp tài khoản cùng Email
-    if (email !== "Tài khoản Suno") {
-        accounts = accounts.filter(acc => acc.email !== email);
+    const existingAcc = accounts.find(acc => acc.email === email);
+    let accId = existingAcc ? existingAcc.id : "acc_" + Date.now();
+
+    if (email !== "Tài khoản Suno" && existingAcc) {
+        oldCookie = existingAcc.cookie || "";
+        oldBrowserToken = existingAcc.browserToken || "";
+        oldDeviceId = existingAcc.deviceId || "";
+        if (existingAcc.userTier) oldUserTier = existingAcc.userTier;
+        if (existingAcc.createSessionToken) oldSessionToken = existingAcc.createSessionToken;
     }
     
-    accounts.push(newAcc);
-    saveSunoAccounts(accounts);
+    const newAcc = {
+        id: accId,
+        email: email,
+        authToken: config.authToken,
+        browserToken: config.browserToken || oldBrowserToken || "",
+        deviceId: config.deviceId || oldDeviceId || "",
+        cookie: config.cookie || oldCookie || "",
+        userTier: config.userTier || oldUserTier,
+        createSessionToken: config.createSessionToken || oldSessionToken,
+        bodyToken: config.sunoToken || "",
+        expiry: exp,
+        addedAt: existingAcc ? existingAcc.addedAt : Date.now()
+    };
+    
+    if (existingAcc) {
+        accounts = accounts.map(a => a.email === email ? newAcc : a);
+    } else {
+        accounts.push(newAcc);
+    }
+    
+    // Optimistic UI Update
+    localSunoAccounts = accounts;
+    // Cập nhật server
+    saveSunoAccountToServer(newAcc);
 }
 
-function deleteSunoAccount(id) {
+async function deleteSunoAccount(id) {
     if (!confirm("Bạn có chắc chắn muốn xóa tài khoản này khỏi danh sách?")) return;
     
     let accounts = getSunoAccounts();
-    accounts = accounts.filter(acc => acc.id !== id);
-    saveSunoAccounts(accounts);
+    const idx = accounts.findIndex(acc => acc.id === id);
+    if (idx === -1) return;
+    
+    // Optimistic Delete
+    accounts.splice(idx, 1);
+    localSunoAccounts = accounts;
     
     const currentIndex = parseInt(localStorage.getItem("suno_current_account_index") || "0", 10);
     if (accounts.length > 0) {
@@ -1440,6 +1625,13 @@ function deleteSunoAccount(id) {
     
     renderSunoAccounts();
     updateSunoUIState();
+
+    // Gửi yêu cầu xóa lên server
+    try {
+        await fetch(`/api/accounts?id=${id}`, { method: "DELETE" });
+    } catch (e) {
+        console.error("Lỗi xóa tài khoản trên server:", e);
+    }
 }
 
 function decodeJWT(token) {
@@ -1512,11 +1704,9 @@ function renderSunoAccounts() {
                 <div class="suno-account-expiry">Hạn: ${expiryText} | <span class="suno-account-status ${statusClass}">${statusText}</span></div>
             </div>
             <div class="suno-account-actions" style="display: flex; gap: 6px;">
-                ${acc.cookie ? `
                 <button type="button" class="suno-account-btn-refresh suno-clip-btn" data-id="${acc.id}" style="padding: 4px 8px; border-color: rgba(59, 130, 246, 0.2); color: var(--color-primary); background: rgba(59, 130, 246, 0.05);">
                     <i data-lucide="refresh-cw" style="width: 12px; height: 12px;"></i> Làm mới
                 </button>
-                ` : ''}
                 <button type="button" class="suno-account-btn-delete suno-clip-btn" data-id="${acc.id}" style="padding: 4px 8px; border-color: rgba(239, 68, 68, 0.2); color: var(--color-danger); background: rgba(239, 68, 68, 0.05);">
                     <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i> Xóa
                 </button>
@@ -1582,8 +1772,10 @@ async function forceRefreshAccount(id) {
             throw new Error(data.error || `Lỗi ${response.status}`);
         }
         
-        if (data.new_auth_token) {
-            updateStoredSunoToken(acc.email, data.new_auth_token);
+        if (data.new_auth_token || data.new_cookie) {
+            updateStoredSunoToken(acc.email, data.new_auth_token, data.new_cookie);
+            if (data.new_auth_token) acc.authToken = data.new_auth_token;
+            if (data.new_cookie) acc.cookie = data.new_cookie;
             alert(`Làm mới session thành công cho tài khoản ${acc.email}!`);
         } else {
             throw new Error("Không nhận được token mới từ server.");
@@ -1703,6 +1895,8 @@ async function generateSunoMusic() {
                     browser_token: account.browserToken,
                     device_id: account.deviceId,
                     suno_token: account.bodyToken || "",
+                    user_tier: account.userTier || "",
+                    create_session_token: account.createSessionToken || "",
                     song_id: currentSongData.id || "",
                     prompt: currentSongData.lyrics || "",
                     tags: currentSongData.style || "",
@@ -1716,9 +1910,10 @@ async function generateSunoMusic() {
             
             const data = await response.json();
             
-            if (data.new_auth_token) {
-                updateStoredSunoToken(account.email, data.new_auth_token);
-                account.authToken = data.new_auth_token;
+            if (data.new_auth_token || data.new_cookie) {
+                updateStoredSunoToken(account.email, data.new_auth_token, data.new_cookie);
+                if (data.new_auth_token) account.authToken = data.new_auth_token;
+                if (data.new_cookie) account.cookie = data.new_cookie;
             }
             
             if (!response.ok) {
@@ -1830,8 +2025,10 @@ function pollSunoStatus(clipIds, songId, account) {
             
             const data = await response.json();
             
-            if (data.new_auth_token) {
-                updateStoredSunoToken(account.email, data.new_auth_token);
+            if (data.new_auth_token || data.new_cookie) {
+                updateStoredSunoToken(account.email, data.new_auth_token, data.new_cookie);
+                if (data.new_auth_token) account.authToken = data.new_auth_token;
+                if (data.new_cookie) account.cookie = data.new_cookie;
             }
             
             let clips = [];
@@ -2207,4 +2404,72 @@ function publishToDrive(clipId, audioUrl, buttonEl) {
         progressWrapper.style.display = "none";
         actionsContainer.style.display = "flex";
     };
+}
+
+// --- Các hàm hỗ trợ điều hướng trên thiết bị di động ---
+function initMobileNavigation() {
+    const mobileNavItems = document.querySelectorAll(".mobile-nav-item");
+    const appContent = document.querySelector(".app-content");
+    
+    if (!mobileNavItems.length || !appContent) return;
+    
+    mobileNavItems.forEach(item => {
+        item.addEventListener("click", () => {
+            const target = item.getAttribute("data-mobile-tab");
+            
+            if (target === "config") {
+                appContent.classList.remove("mobile-show-result", "mobile-show-history");
+                appContent.classList.add("mobile-show-config");
+                updateMobileTabActive("config");
+            } else if (target === "result") {
+                const currentSongTabBtn = document.querySelector('.tab-btn[data-tab="current-song"]');
+                if (currentSongTabBtn) {
+                    currentSongTabBtn.click();
+                } else {
+                    appContent.classList.remove("mobile-show-config", "mobile-show-history");
+                    appContent.classList.add("mobile-show-result");
+                    updateMobileTabActive("result");
+                }
+            } else if (target === "history") {
+                const historyTabBtn = document.querySelector('.tab-btn[data-tab="history-library"]');
+                if (historyTabBtn) {
+                    historyTabBtn.click();
+                } else {
+                    appContent.classList.remove("mobile-show-config", "mobile-show-result");
+                    appContent.classList.add("mobile-show-history");
+                    updateMobileTabActive("history");
+                }
+            }
+        });
+    });
+
+    // Đồng bộ số lượng lịch sử vào tab di động
+    const historyCountObserver = new MutationObserver(() => {
+        syncHistoryCountToMobile();
+    });
+    
+    const historyCountEl = document.getElementById("historyCount");
+    if (historyCountEl) {
+        historyCountObserver.observe(historyCountEl, { childList: true, characterData: true, subtree: true });
+        syncHistoryCountToMobile();
+    }
+}
+
+function syncHistoryCountToMobile() {
+    const historyCountEl = document.getElementById("historyCount");
+    const mobileNavItems = document.querySelectorAll(".mobile-nav-item[data-mobile-tab='history'] span");
+    if (historyCountEl && mobileNavItems.length) {
+        mobileNavItems[0].textContent = `Lịch sử (${historyCountEl.textContent})`;
+    }
+}
+
+function updateMobileTabActive(activeTab) {
+    const mobileNavItems = document.querySelectorAll(".mobile-nav-item");
+    mobileNavItems.forEach(item => {
+        if (item.getAttribute("data-mobile-tab") === activeTab) {
+            item.classList.add("active");
+        } else {
+            item.classList.remove("active");
+        }
+    });
 }

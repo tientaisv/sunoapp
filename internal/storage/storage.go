@@ -70,7 +70,7 @@ func (m *Manager) List() ([]SavedSong, error) {
 
 	var songs []SavedSong
 	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+		if !file.IsDir() && strings.HasPrefix(file.Name(), "song_") && strings.HasSuffix(file.Name(), ".json") {
 			path := filepath.Join(m.Dir, file.Name())
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -146,5 +146,75 @@ func (m *Manager) Delete(id string) error {
 	}
 
 	path := filepath.Join(m.Dir, "song_"+id+".json")
+	return os.Remove(path)
+}
+
+// SunoAccount định nghĩa thông tin tài khoản Suno lưu trên server
+type SunoAccount struct {
+	ID                 string `json:"id"`
+	Email              string `json:"email"`
+	AuthToken          string `json:"authToken"`
+	BrowserToken       string `json:"browserToken"`
+	DeviceID           string `json:"deviceId"`
+	Cookie             string `json:"cookie"`
+	UserTier           string `json:"userTier"`
+	CreateSessionToken string `json:"createSessionToken"`
+	BodyToken          string `json:"bodyToken"`
+	Expiry             int64  `json:"expiry"`
+	AddedAt            int64  `json:"addedAt"`
+}
+
+// ListAccounts trả về danh sách tất cả các tài khoản đã lưu
+func (m *Manager) ListAccounts() ([]SunoAccount, error) {
+	files, err := os.ReadDir(m.Dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var accounts []SunoAccount
+	for _, file := range files {
+		if !file.IsDir() && strings.HasPrefix(file.Name(), "account_") && strings.HasSuffix(file.Name(), ".json") {
+			path := filepath.Join(m.Dir, file.Name())
+			data, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+
+			var acc SunoAccount
+			if err := json.Unmarshal(data, &acc); err == nil {
+				accounts = append(accounts, acc)
+			}
+		}
+	}
+
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].AddedAt > accounts[j].AddedAt
+	})
+
+	return accounts, nil
+}
+
+// SaveAccount lưu hoặc cập nhật tài khoản
+func (m *Manager) SaveAccount(acc SunoAccount) error {
+	if acc.ID == "" {
+		return fmt.Errorf("ID tài khoản không hợp lệ")
+	}
+
+	path := filepath.Join(m.Dir, "account_"+acc.ID+".json")
+	data, err := json.MarshalIndent(acc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("lỗi mã hóa JSON tài khoản: %w", err)
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+// DeleteAccount xóa tài khoản theo ID
+func (m *Manager) DeleteAccount(id string) error {
+	if id == "" {
+		return fmt.Errorf("ID không hợp lệ")
+	}
+
+	path := filepath.Join(m.Dir, "account_"+id+".json")
 	return os.Remove(path)
 }

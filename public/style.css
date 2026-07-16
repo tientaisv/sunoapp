@@ -173,7 +173,7 @@ body {
     display: grid;
     grid-template-columns: 1.1fr 0.9fr;
     gap: 24px;
-    align-items: start;
+    align-items: stretch;
 }
 
 @media (max-width: 1024px) {
@@ -183,10 +183,17 @@ body {
 }
 
 /* Panels */
-.config-panel, .result-panel {
+.config-panel {
     display: flex;
     flex-direction: column;
     gap: 24px;
+}
+
+.result-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    height: 100%;
 }
 
 /* Section Cards styling */
@@ -1021,6 +1028,17 @@ textarea:focus {
     margin-bottom: 8px;
 }
 
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
 .tab-btn {
     background: rgba(30, 41, 59, 0.3);
     border: 1px solid var(--border-color);
@@ -1138,11 +1156,21 @@ textarea:focus {
     border-color: var(--color-primary);
 }
 
+/* Tab History Library styling */
+#tab-history-library.active {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
 /* History Library Layout */
 .history-container {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    flex: 1;
+    min-height: 0;
 }
 
 .history-header {
@@ -1172,9 +1200,11 @@ textarea:focus {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    max-height: 620px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding-right: 6px;
+    max-height: none;
 }
 
 .history-card {
@@ -1763,4 +1793,350 @@ textarea:focus {
 .spin {
     animation: spin 1s linear infinite;
     display: inline-block;
+}
+
+/* --- Mobile Bottom Navigation and General Responsive Styles --- */
+.mobile-bottom-nav {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    /* 1. Base container adjustments */
+    body {
+        padding-bottom: 74px; /* Space for sticky bottom tab bar */
+    }
+    
+    .container {
+        padding: 12px 10px;
+        gap: 16px;
+    }
+
+    /* 2. Sticky Bottom Navigation Bar with Glassmorphism */
+    .mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+        z-index: 999;
+        padding: 6px 12px;
+        justify-content: space-around;
+        align-items: center;
+    }
+    
+    .mobile-nav-item {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        font-family: var(--font-header);
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        cursor: pointer;
+        transition: var(--transition-fast);
+        padding: 4px 0;
+        border-radius: 8px;
+    }
+    
+    .mobile-nav-item i {
+        width: 20px;
+        height: 20px;
+        transition: transform 0.2s ease;
+    }
+    
+    .mobile-nav-item:active i {
+        transform: scale(0.9);
+    }
+    
+    .mobile-nav-item.active {
+        color: var(--color-primary);
+        text-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+    }
+    
+    .mobile-nav-item.active i {
+        color: var(--color-primary);
+        filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.4));
+    }
+
+    /* 3. Panel switching on mobile */
+    .app-content {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px;
+    }
+    
+    .app-content.mobile-show-config .config-panel {
+        display: flex !important;
+    }
+    
+    .app-content.mobile-show-config .result-panel {
+        display: none !important;
+    }
+    
+    .app-content.mobile-show-result .config-panel,
+    .app-content.mobile-show-history .config-panel {
+        display: none !important;
+    }
+    
+    .app-content.mobile-show-result .result-panel,
+    .app-content.mobile-show-history .result-panel {
+        display: flex !important;
+    }
+
+    /* 4. App Header adjustments */
+    .app-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 12px;
+    }
+    
+    .logo-area {
+        justify-content: center;
+        text-align: center;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .logo-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+    }
+    
+    .logo-icon i {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .app-header h1 {
+        font-size: 1.35rem;
+    }
+    
+    .subtitle {
+        font-size: 0.78rem;
+    }
+    
+    /* Hide text badges to avoid clutter */
+    .app-header .badge {
+        display: none !important;
+    }
+    
+    .header-badges {
+        justify-content: center;
+        width: 100%;
+        gap: 8px;
+    }
+    
+    .header-badges button {
+        flex: 1;
+        justify-content: center;
+        height: 32px !important;
+        font-size: 0.8rem !important;
+        border-radius: 8px !important;
+    }
+
+    /* 5. Section Cards */
+    .section-card {
+        padding: 16px;
+        gap: 16px;
+        border-radius: 12px;
+    }
+    
+    .section-title {
+        font-size: 1.05rem;
+        padding-bottom: 10px;
+    }
+
+    /* 6. Form control modifications for mobile */
+    .grid-2-col {
+        grid-template-columns: 1fr !important;
+        gap: 12px;
+    }
+    
+    .btn-group {
+        width: 100% !important;
+        display: flex;
+    }
+    
+    .btn-item {
+        flex: 1;
+        text-align: center;
+        padding: 8px 6px;
+        font-size: 0.8rem;
+    }
+    
+    /* Auto-wrap button groups that have long text on tiny devices */
+    #catholicDegree {
+        flex-direction: column;
+        width: 100%;
+        background: rgba(15, 23, 42, 0.2);
+    }
+    #catholicDegree .btn-item {
+        width: 100%;
+        border-radius: 8px;
+        margin: 2px 0;
+    }
+    
+    .custom-color-area {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    /* 7. Result cards & buttons */
+    .result-container {
+        padding: 16px;
+        gap: 16px;
+        border-radius: 12px;
+    }
+    
+    .title-display-area {
+        padding: 12px 14px;
+        margin-bottom: 12px;
+    }
+    
+    .res-title-display {
+        font-size: 1.25rem;
+    }
+
+    .result-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding-bottom: 12px;
+    }
+    
+    .result-actions-top {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .result-panel .tabs-header {
+        display: none !important; /* Hidden because mobile bottom nav handles it */
+    }
+
+    /* 2-column grid for result editor toggle buttons */
+    .editor-toggle-bar {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 6px;
+    }
+    
+    .editor-toggle-bar .btn-action {
+        width: 100%;
+        justify-content: center;
+        padding: 8px 10px;
+        font-size: 0.78rem;
+    }
+    
+    /* PDF download spans across both columns at the bottom */
+    #btnDownloadPDF {
+        grid-column: span 2;
+    }
+
+    /* 8. Suno Clip lists and items */
+    .suno-clip-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 12px;
+    }
+    
+    .suno-clip-cover-wrapper {
+        width: 100%;
+        height: 140px;
+    }
+    
+    .suno-clip-cover {
+        border-radius: 8px;
+    }
+    
+    .suno-clip-actions {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+    }
+    
+    .suno-clip-btn {
+        flex: 1;
+        justify-content: center;
+        padding: 8px 10px;
+    }
+
+    /* 9. History Card and Actions */
+    .history-card {
+        padding: 12px;
+        gap: 10px;
+    }
+    
+    .history-card-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+    }
+    
+    .history-card-date {
+        align-self: flex-start;
+        font-size: 0.7rem;
+    }
+    
+    .history-card-actions {
+        justify-content: space-between;
+        gap: 6px;
+    }
+    
+    .history-card-actions .btn-action {
+        flex: 1;
+        justify-content: center;
+        padding: 6px 4px;
+        font-size: 0.72rem;
+        gap: 4px;
+    }
+
+    /* 10. Modal controls */
+    .modal-content {
+        padding: 16px;
+        width: 95%;
+        border-radius: 16px;
+    }
+    
+    /* Stack config action buttons inside modal */
+    #btnImportCookieJson {
+        margin-left: 0 !important;
+        width: 100%;
+        margin-top: 8px;
+    }
+    #btnImportSunoCurl {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Even smaller screen adjustments */
+    .suno-clip-cover-wrapper {
+        height: 110px;
+    }
+    
+    .editor-toggle-bar {
+        grid-template-columns: 1fr;
+    }
+    
+    #btnDownloadPDF {
+        grid-column: span 1;
+    }
 }

@@ -41,7 +41,7 @@
             </div>
         </header>
 
-        <main class="app-content">
+        <main class="app-content mobile-show-config">
             <!-- Left Panel: Configuration Form -->
             <section class="config-panel">
                 <!-- 1. Nhập Ý tưởng & Màu sắc -->
@@ -580,6 +580,8 @@
                 <label for="sunoCurlInput" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 0.85rem;">Dán lệnh cURL từ Suno để thêm tài khoản:</label>
                 <textarea id="sunoCurlInput" class="textarea-control" style="min-height: 80px; font-family: monospace; font-size: 0.75rem;" placeholder="curl 'https://studio-api-prod.suno.com/...' ..."></textarea>
                 <button type="button" class="btn-action btn-sm btn-primary" id="btnImportSunoCurl" style="margin-top: 8px;"><i data-lucide="plus-circle"></i> Thêm tài khoản từ cURL</button>
+                <input type="file" id="sunoCookieJsonInput" accept=".json" style="display: none;">
+                <button type="button" class="btn-action btn-sm btn-secondary" id="btnImportCookieJson" style="margin-top: 8px; margin-left: 8px; background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.2);"><i data-lucide="file-json"></i> Tải file Cookie JSON</button>
             </div>
             
             <div style="border-top: 1px dashed var(--border-color); margin: 16px 0; padding-top: 16px;">
@@ -652,7 +654,23 @@
         </div>
     </div>
 
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-bottom-nav">
+        <button type="button" class="mobile-nav-item active" data-mobile-tab="config">
+            <i data-lucide="sparkles"></i>
+            <span>Sáng tác</span>
+        </button>
+        <button type="button" class="mobile-nav-item" data-mobile-tab="result">
+            <i data-lucide="music-2"></i>
+            <span>Tác phẩm</span>
+        </button>
+        <button type="button" class="mobile-nav-item" data-mobile-tab="history">
+            <i data-lucide="folder-heart"></i>
+            <span>Lịch sử</span>
+        </button>
+    </nav>
+
     <!-- Script logic -->
-    <script src="app.js"></script>
+    <script src="app.js?v=1.0.2"></script>
 </body>
 </html>
