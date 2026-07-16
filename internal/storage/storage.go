@@ -209,6 +209,55 @@ func (m *Manager) SaveAccount(acc SunoAccount) error {
 	return os.WriteFile(path, data, 0644)
 }
 
+// UpdateAccountTokens cập nhật token, cookie và expiry của tài khoản (không ghi đè các trường khác)
+func (m *Manager) UpdateAccountTokens(id, authToken, cookie string, expiry int64) error {
+	if id == "" {
+		return fmt.Errorf("ID tài khoản không hợp lệ")
+	}
+
+	path := filepath.Join(m.Dir, "account_"+id+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("không tìm thấy tài khoản: %w", err)
+	}
+
+	var acc SunoAccount
+	if err := json.Unmarshal(data, &acc); err != nil {
+		return fmt.Errorf("lỗi giải mã dữ liệu tài khoản: %w", err)
+	}
+
+	if authToken != "" {
+		acc.AuthToken = authToken
+	}
+	if cookie != "" {
+		acc.Cookie = cookie
+	}
+	if expiry > 0 {
+		acc.Expiry = expiry
+	}
+
+	newData, err := json.MarshalIndent(acc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("lỗi mã hóa JSON tài khoản: %w", err)
+	}
+
+	return os.WriteFile(path, newData, 0644)
+}
+
+// FindAccountByEmail tìm tài khoản theo địa chỉ email
+func (m *Manager) FindAccountByEmail(email string) (SunoAccount, error) {
+	accounts, err := m.ListAccounts()
+	if err != nil {
+		return SunoAccount{}, err
+	}
+	for _, acc := range accounts {
+		if acc.Email == email {
+			return acc, nil
+		}
+	}
+	return SunoAccount{}, fmt.Errorf("không tìm thấy tài khoản với email: %s", email)
+}
+
 // DeleteAccount xóa tài khoản theo ID
 func (m *Manager) DeleteAccount(id string) error {
 	if id == "" {

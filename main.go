@@ -444,6 +444,75 @@ func getOrRefreshSunoToken(authToken string, cookie string) (string, string, boo
 	return authToken, cookie, false, nil
 }
 
+// refreshAndSaveAccount làm mới token cho một account cụ thể và lưu lại kết quả vào storage
+func refreshAndSaveAccount(mgr *storage.Manager, acc storage.SunoAccount) error {
+	if acc.Cookie == "" {
+		return fmt.Errorf("account %s không có cookie", acc.Email)
+	}
+
+	newToken, newCookie, err := refreshSunoToken(acc.Cookie)
+	if err != nil {
+		return fmt.Errorf("lỗi refresh token cho %s: %w", acc.Email, err)
+	}
+
+	// Tính thời hạn mới của token
+	var newExpiry int64
+	if exp, err := getJWTExpiry(newToken); err == nil {
+		newExpiry = exp.Unix()
+	}
+
+	if err := mgr.UpdateAccountTokens(acc.ID, newToken, newCookie, newExpiry); err != nil {
+		return fmt.Errorf("lỗi lưu token mới cho %s: %w", acc.Email, err)
+	}
+
+	log.Printf("[AutoRefresh] Đã refresh token thành công cho tài khoản: %s", acc.Email)
+	return nil
+}
+
+// startTokenAutoRefresh khởi chạy goroutine làm mới token tự động mỗi 30 phút
+func startTokenAutoRefresh(mgr *storage.Manager) {
+	refreshAll := func() {
+		accounts, err := mgr.ListAccounts()
+		if err != nil {
+			log.Printf("[AutoRefresh] Lỗi đọc danh sách tài khoản: %v", err)
+			return
+		}
+
+		if len(accounts) == 0 {
+			return
+		}
+
+		successCount := 0
+		for _, acc := range accounts {
+			if acc.Cookie == "" {
+				continue
+			}
+			if err := refreshAndSaveAccount(mgr, acc); err != nil {
+				log.Printf("[AutoRefresh] %v", err)
+			} else {
+				successCount++
+			}
+		}
+		if successCount > 0 {
+			log.Printf("[AutoRefresh] Đã làm mới token cho %d/%d tài khoản", successCount, len(accounts))
+		}
+	}
+
+	// Chạy ngay lần đầu khi server khởi động
+	go func() {
+		time.Sleep(5 * time.Second) // Chờ server ổn định
+		refreshAll()
+		// Sau đó chạy định kỳ mỗi 30 phút
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			refreshAll()
+		}
+	}()
+
+	log.Println("[AutoRefresh] Đã khởi động hệ thống làm mới token tự động (mỗi 30 phút)")
+}
+
 func mergeClips(existing []storage.SunoClip, newClips []storage.SunoClip) []storage.SunoClip {
 	clipMap := make(map[string]int)
 	for i, c := range existing {
@@ -494,6 +563,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("[LỖI KHỞI TẠO STORAGE] %v", err)
 	}
+
+	// Khởi động hệ thống làm mới token tự động ngầm
+	startTokenAutoRefresh(mgr)
 
 	// Đăng ký routes
 	mux := http.NewServeMux()
@@ -587,6 +659,23 @@ func main() {
 			} else {
 				log.Printf("Ép buộc làm mới token thất bại: %v", refreshErr)
 			}
+		}
+
+		// 4. Lưu token + cookie mới vào storage nếu có refresh
+		if tokenRefreshed && req.AccountEmail != "" {
+			go func(email, newAuthToken, newCookieVal string) {
+				if acc, err := mgr.FindAccountByEmail(email); err == nil {
+					var expiry int64
+					if exp, err := getJWTExpiry(newAuthToken); err == nil {
+						expiry = exp.Unix()
+					}
+					if err := mgr.UpdateAccountTokens(acc.ID, newAuthToken, newCookieVal, expiry); err != nil {
+						log.Printf("[Generate] Lỗi lưu token mới cho %s: %v", email, err)
+					} else {
+						log.Printf("[Generate] Đã lưu token mới vào storage cho tài khoản: %s", email)
+					}
+				}
+			}(req.AccountEmail, req.AuthToken, req.Cookie)
 		}
 
 		if err != nil {
@@ -723,6 +812,23 @@ func main() {
 			}
 		}
 
+		// 4. Lưu token + cookie mới vào storage nếu có refresh
+		if tokenRefreshed && req.AccountEmail != "" {
+			go func(email, newAuthToken, newCookieVal string) {
+				if acc, err := mgr.FindAccountByEmail(email); err == nil {
+					var expiry int64
+					if exp, err := getJWTExpiry(newAuthToken); err == nil {
+						expiry = exp.Unix()
+					}
+					if err := mgr.UpdateAccountTokens(acc.ID, newAuthToken, newCookieVal, expiry); err != nil {
+						log.Printf("[Feed] Lỗi lưu token mới cho %s: %v", email, err)
+					} else {
+						log.Printf("[Feed] Đã lưu token mới vào storage cho tài khoản: %s", email)
+					}
+				}
+			}(req.AccountEmail, req.AuthToken, req.Cookie)
+		}
+
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -815,6 +921,48 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{
 			"new_auth_token": newToken,
 			"new_cookie":     newCookie,
+		})
+	})
+
+	// Route API làm mới token thủ công cho tất cả tài khoản
+	mux.HandleFunc("/api/suno/accounts/refresh-all", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Phương thức không được hỗ trợ", http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		accounts, err := mgr.ListAccounts()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Lỗi đọc danh sách tài khoản: " + err.Error()})
+			return
+		}
+
+		type refreshResult struct {
+			Email   string `json:"email"`
+			Success bool   `json:"success"`
+			Error   string `json:"error,omitempty"`
+		}
+
+		var results []refreshResult
+		for _, acc := range accounts {
+			if acc.Cookie == "" {
+				results = append(results, refreshResult{Email: acc.Email, Success: false, Error: "Không có cookie"})
+				continue
+			}
+			if err := refreshAndSaveAccount(mgr, acc); err != nil {
+				results = append(results, refreshResult{Email: acc.Email, Success: false, Error: err.Error()})
+			} else {
+				results = append(results, refreshResult{Email: acc.Email, Success: true})
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"results": results,
+			"total":   len(accounts),
 		})
 	})
 
