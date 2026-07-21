@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 	"taonhac/internal/composer"
+	"taonhac/internal/knowledge"
 	"taonhac/internal/prompt"
 	"taonhac/internal/storage"
 )
@@ -123,6 +124,7 @@ type ComposeRequest struct {
 	VocalPlacement string   `json:"vocalPlacement"`
 	ExistingLyrics string   `json:"existingLyrics"`
 	RewritePrompt  string   `json:"rewritePrompt"`
+	ComposerId     string   `json:"composerId"`
 }
 
 type SunoGenerateRequest struct {
@@ -564,11 +566,69 @@ func main() {
 		log.Fatalf("[LỖI KHỞI TẠO STORAGE] %v", err)
 	}
 
+	// Khởi tạo Knowledge Manager lưu trữ kiến thức nhạc sĩ
+	knowledgeMgr, err := knowledge.NewManager("data/composers.json")
+	if err != nil {
+		log.Printf("[LỖI KHỞI TẠO KNOWLEDGE MANAGER] %v", err)
+	}
+
 	// Khởi động hệ thống làm mới token tự động ngầm
 	startTokenAutoRefresh(mgr)
 
 	// Đăng ký routes
 	mux := http.NewServeMux()
+
+	// Route API quản lý kiến thức nhạc sĩ (GET, POST, DELETE)
+	mux.HandleFunc("/api/composers", func(w http.ResponseWriter, r *http.Request) {
+		if knowledgeMgr == nil {
+			http.Error(w, "Knowledge Manager chưa được khởi tạo", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodGet:
+			json.NewEncoder(w).Encode(knowledgeMgr.List())
+		case http.MethodPost:
+			var item knowledge.ComposerKnowledge
+			if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": "Dữ liệu không hợp lệ: " + err.Error()})
+				return
+			}
+			if strings.TrimSpace(item.Name) == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": "Tên nhạc sĩ không được để trống"})
+				return
+			}
+			if err := knowledgeMgr.AddOrUpdate(item); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{"message": "Đã lưu kiến thức nhạc sĩ thành công"})
+		default:
+			http.Error(w, "Phương thức không được hỗ trợ", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/composers/", func(w http.ResponseWriter, r *http.Request) {
+		if knowledgeMgr == nil {
+			http.Error(w, "Knowledge Manager chưa được khởi tạo", http.StatusInternalServerError)
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/api/composers/")
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodDelete {
+			if err := knowledgeMgr.Delete(id); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{"message": "Đã xóa nhạc sĩ thành công"})
+			return
+		}
+		http.Error(w, "Phương thức không được hỗ trợ", http.StatusMethodNotAllowed)
+	})
 
 	// Route API tạo nhạc trên Suno AI (Tự động)
 	mux.HandleFunc("/api/suno/generate", func(w http.ResponseWriter, r *http.Request) {
@@ -999,10 +1059,20 @@ func main() {
 			req.Verses = 5
 		}
 
-		log.Printf("[API] Nhận yêu cầu sáng tác bài hát với chủ đề: '%s', thể loại: '%s'", req.Topic, req.Genre)
+		log.Printf("[API] Nhận yêu cầu sáng tác bài hát với chủ đề: '%s', thể loại: '%s', nhạc sĩ: '%s'", req.Topic, req.Genre, req.ComposerId)
+
+		// Lấy context kiến thức nhạc sĩ
+		composerPromptCtx := ""
+		composerName := ""
+		if knowledgeMgr != nil && req.ComposerId != "" {
+			composerPromptCtx = knowledgeMgr.BuildPromptContext(req.ComposerId)
+			if ck, ok := knowledgeMgr.Get(req.ComposerId); ok {
+				composerName = ck.Name
+			}
+		}
 
 		// Tạo prompt
-		systemPrompt := prompt.GetSystemPrompt()
+		systemPrompt := prompt.GetSystemPrompt(composerPromptCtx)
 		userPrompt := prompt.BuildUserPrompt(
 			req.Topic,
 			req.CatholicDegree,
@@ -1020,6 +1090,7 @@ func main() {
 			req.VocalPlacement,
 			req.ExistingLyrics,
 			req.RewritePrompt,
+			composerPromptCtx,
 		)
 
 		// Gọi AI sáng tác nhạc
@@ -1087,6 +1158,8 @@ func main() {
 			VocalHarmony:   req.VocalHarmony,
 			VocalTechnique: req.VocalTechnique,
 			VocalPlacement: req.VocalPlacement,
+			ComposerId:     req.ComposerId,
+			ComposerName:   composerName,
 		}
 
 		if err := mgr.Save(savedSong); err != nil {

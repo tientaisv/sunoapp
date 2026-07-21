@@ -46,6 +46,8 @@ type SavedSong struct {
 	VocalHarmony   string     `json:"vocalHarmony"`
 	VocalTechnique string     `json:"vocalTechnique"`
 	VocalPlacement string     `json:"vocalPlacement"`
+	ComposerId     string     `json:"composerId,omitempty"`
+	ComposerName   string     `json:"composerName,omitempty"`
 	SunoClips      []SunoClip `json:"sunoClips,omitempty"`
 }
 

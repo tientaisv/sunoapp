@@ -2,6 +2,8 @@
 document.addEventListener("DOMContentLoaded", async () => {
     lucide.createIcons();
     initUIHandlers();
+    await loadComposersList();
+    initComposerModalHandlers();
     await fetchSunoAccounts();
     initSunoIntegration();
     checkAuthStatus();
@@ -492,7 +494,8 @@ async function handleCompose(mode, extraParam) {
                 vocalTechnique: vocalTechnique,
                 vocalPlacement: vocalPlacement,
                 existingLyrics: (mode === "remix" || mode === "rewrite") ? currentSongData.lyrics : "",
-                rewritePrompt: mode === "rewrite" ? extraParam : ""
+                rewritePrompt: mode === "rewrite" ? extraParam : "",
+                composerId: document.getElementById("composerSelect") ? document.getElementById("composerSelect").value : "auto"
             })
         });
 
@@ -736,6 +739,7 @@ async function loadHistory() {
                 <div class="history-card-meta">
                     <span class="history-card-badge">Tông: ${song.key || "Tự động"}</span>
                     <span class="history-card-badge">Thể loại: ${song.genre}</span>
+                    ${song.composerName ? `<span class="history-card-badge" style="background: rgba(129, 140, 248, 0.2); color: #a5b4fc; border: 1px solid rgba(129, 140, 248, 0.3);">🎼 ${escapeHTML(song.composerName)}</span>` : ''}
                     <span class="history-card-badge">Giọng: ${song.voice}</span>
                     <span class="history-card-badge">Nhịp: ${song.tempo}</span>
                 </div>
@@ -2473,3 +2477,240 @@ function updateMobileTabActive(activeTab) {
         }
     });
 }
+
+// ==========================================
+// THƯ VIỆN KIẾN THỨC NHẠC SĨ VIỆT NAM (JS)
+// ==========================================
+let composersList = [];
+
+async function loadComposersList() {
+    try {
+        const res = await fetch("/api/composers");
+        if (!res.ok) return;
+        composersList = await res.json();
+        renderComposerSelect();
+    } catch (e) {
+        console.error("Lỗi nạp danh sách nhạc sĩ:", e);
+    }
+}
+
+function renderComposerSelect() {
+    const select = document.getElementById("composerSelect");
+    if (!select) return;
+
+    const currentVal = select.value || "auto";
+    let html = `<option value="auto">🌟 Tự động (Học tổng hợp từ các Nhạc sĩ Bậc thầy Việt Nam)</option>`;
+    composersList.forEach(c => {
+        html += `<option value="${c.id}">🎼 ${c.name} (${c.era_genre})</option>`;
+    });
+    select.innerHTML = html;
+    select.value = currentVal;
+
+    select.removeEventListener("change", updateComposerSummary);
+    select.addEventListener("change", updateComposerSummary);
+    updateComposerSummary();
+}
+
+function updateComposerSummary() {
+    const select = document.getElementById("composerSelect");
+    const summary = document.getElementById("composerSummary");
+    if (!select || !summary) return;
+
+    const val = select.value;
+    if (val === "auto") {
+        summary.innerHTML = "AI sẽ thẩm thấu ca từ, quy tắc gieo vần, hợp âm & triết lý nhạc sĩ từ tất cả các bậc thầy âm nhạc Việt Nam để sáng tác.";
+        return;
+    }
+
+    const c = composersList.find(item => item.id === val);
+    if (c) {
+        summary.innerHTML = `<strong>${c.name}</strong>: ${c.description} <em>(Gieo vần & Hợp âm: ${c.musical_style})</em>`;
+    }
+}
+
+function initComposerModalHandlers() {
+    const btnManage = document.getElementById("btnManageComposers");
+    const modal = document.getElementById("composerModal");
+    const btnClose = document.getElementById("btnCloseComposerModal");
+    const btnAddNew = document.getElementById("btnAddNewComposer");
+    const formArea = document.getElementById("composerFormArea");
+    const form = document.getElementById("composerForm");
+    const btnCancel = document.getElementById("btnCancelComposerForm");
+
+    if (btnManage && modal) {
+        btnManage.addEventListener("click", () => {
+            modal.classList.add("active");
+            renderComposerListContainer();
+            lucide.createIcons();
+        });
+    }
+
+    if (btnClose && modal) {
+        btnClose.addEventListener("click", () => {
+            modal.classList.remove("active");
+            if (formArea) formArea.style.display = "none";
+        });
+    }
+
+    if (modal) {
+        modal.addEventListener("click", (e) => {
+            if (e.target === modal) {
+                modal.classList.remove("active");
+                if (formArea) formArea.style.display = "none";
+            }
+        });
+    }
+
+    if (btnAddNew && formArea) {
+        btnAddNew.addEventListener("click", () => {
+            document.getElementById("compFormId").value = "";
+            document.getElementById("compFormName").value = "";
+            document.getElementById("compFormEra").value = "";
+            document.getElementById("compFormDesc").value = "";
+            document.getElementById("compFormLyrical").value = "";
+            document.getElementById("compFormMusical").value = "";
+            document.getElementById("compFormMetaphors").value = "";
+            document.getElementById("compFormThemes").value = "";
+            document.getElementById("compFormSample").value = "";
+            document.getElementById("composerFormTitle").innerHTML = `<i data-lucide="plus-circle"></i> Thêm Nhạc sĩ mới vào hệ thống`;
+            formArea.style.display = "block";
+            formArea.scrollIntoView({ behavior: 'smooth' });
+            lucide.createIcons();
+        });
+    }
+
+    if (btnCancel && formArea) {
+        btnCancel.addEventListener("click", () => {
+            formArea.style.display = "none";
+        });
+    }
+
+    if (form) {
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const id = document.getElementById("compFormId").value;
+            const name = document.getElementById("compFormName").value.trim();
+            const era_genre = document.getElementById("compFormEra").value.trim();
+            const description = document.getElementById("compFormDesc").value.trim();
+            const lyrical_style = document.getElementById("compFormLyrical").value.trim();
+            const musical_style = document.getElementById("compFormMusical").value.trim();
+            const metaphors = document.getElementById("compFormMetaphors").value.split(",").map(s => s.trim()).filter(Boolean);
+            const key_themes = document.getElementById("compFormThemes").value.split(",").map(s => s.trim()).filter(Boolean);
+            const sample_analysis = document.getElementById("compFormSample").value.trim();
+
+            if (!name) {
+                alert("Vui lòng nhập tên nhạc sĩ!");
+                return;
+            }
+
+            const payload = {
+                id,
+                name,
+                era_genre,
+                description,
+                lyrical_style,
+                musical_style,
+                metaphors,
+                key_themes,
+                sample_analysis
+            };
+
+            try {
+                const res = await fetch("/api/composers", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || "Lỗi lưu nhạc sĩ");
+                }
+                formArea.style.display = "none";
+                await loadComposersList();
+                renderComposerListContainer();
+                alert("Đã lưu thông tin kiến thức nhạc sĩ thành công!");
+            } catch (err) {
+                alert("Lỗi: " + err.message);
+            }
+        });
+    }
+}
+
+function renderComposerListContainer() {
+    const container = document.getElementById("composerListContainer");
+    if (!container) return;
+
+    if (composersList.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px; grid-column: span 2;">Chưa có dữ liệu nhạc sĩ.</div>`;
+        return;
+    }
+
+    let html = "";
+    composersList.forEach(c => {
+        const isCustom = c.is_custom;
+        const themesBadge = (c.key_themes || []).map(t => `<span style="background: rgba(129, 140, 248, 0.15); color: #a5b4fc; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">${t}</span>`).join(" ");
+        const metaphorsBadge = (c.metaphors || []).map(m => `<span style="background: rgba(236, 72, 153, 0.15); color: #f472b6; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">${m}</span>`).join(" ");
+
+        html += `
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h4 style="margin: 0; font-size: 1rem; color: #fff; display: flex; align-items: center; gap: 6px;">
+                        🎼 ${c.name} ${isCustom ? '<span style="font-size: 0.7rem; background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 1px 5px; border-radius: 4px;">Tự thêm</span>' : ''}
+                    </h4>
+                    <span style="font-size: 0.78rem; color: #818cf8; font-weight: 500;">${c.era_genre || ''}</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    ${isCustom ? `<button type="button" class="btn-action btn-sm btn-secondary" onclick="editComposerItem('${c.id}')" style="padding: 2px 6px; font-size: 0.7rem;"><i data-lucide="edit"></i> Chỉnh sửa</button>
+                    <button type="button" class="btn-action btn-sm btn-secondary" onclick="deleteComposerItem('${c.id}')" style="padding: 2px 6px; font-size: 0.7rem; color: #ef4444;"><i data-lucide="trash-2"></i> Xóa</button>` : ''}
+                </div>
+            </div>
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0; line-height: 1.35;">${c.description || ''}</p>
+            ${c.lyrical_style ? `<div style="font-size: 0.78rem; color: var(--text-muted);"><strong>Ca từ & vần:</strong> ${c.lyrical_style}</div>` : ''}
+            ${c.musical_style ? `<div style="font-size: 0.78rem; color: var(--text-muted);"><strong>Hợp âm & Nhạc lý:</strong> ${c.musical_style}</div>` : ''}
+            ${metaphorsBadge ? `<div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;"><strong style="font-size: 0.75rem; color: var(--text-muted);">Ẩn dụ:</strong> ${metaphorsBadge}</div>` : ''}
+            ${c.sample_analysis ? `<div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; font-size: 0.75rem; color: #cbd5e1; font-family: monospace; line-height: 1.3;">${c.sample_analysis}</div>` : ''}
+        </div>`;
+    });
+
+    container.innerHTML = html;
+    lucide.createIcons();
+}
+
+window.editComposerItem = function(id) {
+    const c = composersList.find(item => item.id === id);
+    if (!c) return;
+
+    document.getElementById("compFormId").value = c.id;
+    document.getElementById("compFormName").value = c.name || "";
+    document.getElementById("compFormEra").value = c.era_genre || "";
+    document.getElementById("compFormDesc").value = c.description || "";
+    document.getElementById("compFormLyrical").value = c.lyrical_style || "";
+    document.getElementById("compFormMusical").value = c.musical_style || "";
+    document.getElementById("compFormMetaphors").value = (c.metaphors || []).join(", ");
+    document.getElementById("compFormThemes").value = (c.key_themes || []).join(", ");
+    document.getElementById("compFormSample").value = c.sample_analysis || "";
+    
+    document.getElementById("composerFormTitle").innerHTML = `<i data-lucide="edit"></i> Chỉnh sửa kiến thức Nhạc sĩ: ${c.name}`;
+    const formArea = document.getElementById("composerFormArea");
+    if (formArea) {
+        formArea.style.display = "block";
+        formArea.scrollIntoView({ behavior: 'smooth' });
+        lucide.createIcons();
+    }
+};
+
+window.deleteComposerItem = async function(id) {
+    if (!confirm("Bạn có chắc chắn muốn xóa kiến thức nhạc sĩ này khỏi hệ thống?")) return;
+    try {
+        const res = await fetch(`/api/composers/${id}`, { method: "DELETE" });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Lỗi xóa nhạc sĩ");
+        }
+        await loadComposersList();
+        renderComposerListContainer();
+    } catch (e) {
+        alert("Lỗi: " + e.message);
+    }
+};

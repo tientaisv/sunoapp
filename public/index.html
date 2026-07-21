@@ -86,6 +86,24 @@
                 <div class="section-card">
                     <h2 class="section-title"><i data-lucide="sliders"></i> 2. Bộ lọc & Phong cách âm nhạc</h2>
 
+                    <!-- Phong cách & Kiến thức Nhạc sĩ Việt Nam -->
+                    <div class="filter-group" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); padding: 12px; border-radius: 10px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label class="group-label" style="margin-bottom: 0; color: #818cf8; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                                <i data-lucide="book-open" style="width: 16px; height: 16px;"></i> Học phong cách Nhạc sĩ Việt Nam
+                            </label>
+                            <button type="button" class="btn-action btn-sm btn-secondary" id="btnManageComposers" style="font-size: 0.75rem; padding: 3px 10px; background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); color: #a5b4fc;">
+                                <i data-lucide="library" style="width: 13px; height: 13px;"></i> Thư viện Kiến thức
+                            </button>
+                        </div>
+                        <select id="composerSelect" class="input-control" style="width: 100%; font-size: 0.9rem; font-weight: 500;">
+                            <option value="auto">🌟 Tự động (Học tổng hợp từ các Nhạc sĩ Bậc thầy Việt Nam)</option>
+                        </select>
+                        <small id="composerSummary" style="color: var(--text-muted); font-size: 0.78rem; margin-top: 6px; display: block; line-height: 1.3;">
+                            AI sẽ thẩm thấu ca từ, quy tắc gieo vần, hợp âm & triết lý nhạc sĩ được chọn để sáng tác.
+                        </small>
+                    </div>
+
                     <!-- Mức độ chất liệu Công giáo -->
                     <div class="filter-group">
                         <label class="group-label">Mức độ chất liệu Công giáo trong lời</label>
@@ -650,6 +668,70 @@
             
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
                 <button type="button" class="btn-action btn-primary" id="btnSaveSunoConfig"><i data-lucide="check"></i> Hoàn tất</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Thư viện Kiến thức Nhạc sĩ -->
+    <div id="composerModal" class="modal-overlay">
+        <div class="modal-content modal-lg" style="max-width: 850px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                <h3 style="display: flex; align-items: center; gap: 8px; font-size: 1.15rem; color: #818cf8;"><i data-lucide="library"></i> Thư viện Kiến thức Nhạc sĩ Việt Nam</h3>
+                <button class="modal-close" id="btnCloseComposerModal">&times;</button>
+            </div>
+            <div class="modal-body" style="padding-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Kho tàng tri thức & phân tích đặc điểm âm nhạc của các Nhạc sĩ tiêu biểu Việt Nam cho AI thẩm thấu:</p>
+                    <button class="btn-action btn-sm btn-primary" id="btnAddNewComposer" style="font-size: 0.8rem; height: 32px;"><i data-lucide="plus"></i> Thêm Nhạc sĩ mới</button>
+                </div>
+                
+                <div id="composerListContainer" class="composer-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; max-height: 480px; overflow-y: auto; padding-right: 4px;">
+                    <!-- Dynamic List of Composers -->
+                </div>
+
+                <!-- Form Thêm / Sửa Nhạc sĩ -->
+                <div id="composerFormArea" style="display: none; margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 16px; background: rgba(15, 23, 42, 0.4); padding: 16px; border-radius: 10px;">
+                    <h4 id="composerFormTitle" style="margin-top: 0; color: #a5b4fc; display: flex; align-items: center; gap: 6px;"><i data-lucide="plus-circle"></i> Thêm Nhạc sĩ / Kiến thức mới vào hệ thống</h4>
+                    <form id="composerForm" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                        <input type="hidden" id="compFormId">
+                        <div class="form-group" style="grid-column: span 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Tên nhạc sĩ (*):</label>
+                            <input type="text" id="compFormName" class="input-control" placeholder="Ví dụ: Hoàng Thi Thơ" required style="font-size: 0.85rem;">
+                        </div>
+                        <div class="form-group" style="grid-column: span 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Thời kỳ / Thể loại đặc trưng:</label>
+                            <input type="text" id="compFormEra" class="input-control" placeholder="Ví dụ: Tình ca quê hương / Bolero" style="font-size: 0.85rem;">
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Mô tả & Định hướng sáng tác:</label>
+                            <textarea id="compFormDesc" class="input-control" rows="2" placeholder="Ví dụ: Ca từ mộc mạc, đậm chất dân gian đồng quê..." style="font-size: 0.85rem; height: 50px;"></textarea>
+                        </div>
+                        <div class="form-group" style="grid-column: span 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Đặc điểm Ca từ & Gieo vần:</label>
+                            <textarea id="compFormLyrical" class="input-control" rows="2" placeholder="Ví dụ: Ca từ tượng hình, gieo vần mượt mà..." style="font-size: 0.85rem; height: 50px;"></textarea>
+                        </div>
+                        <div class="form-group" style="grid-column: span 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Tư duy Nhạc lý & Tiến trình Hợp âm:</label>
+                            <textarea id="compFormMusical" class="input-control" rows="2" placeholder="Ví dụ: Nhịp 4/4 rộn rã, hợp âm C - Am - Dm - G7..." style="font-size: 0.85rem; height: 50px;"></textarea>
+                        </div>
+                        <div class="form-group" style="grid-column: span 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Hình ảnh ẩn dụ đặc trưng (phân cách dấu phẩy):</label>
+                            <input type="text" id="compFormMetaphors" class="input-control" placeholder="lúa vàng, đêm trăng, cô thắm, chuyến đò" style="font-size: 0.85rem;">
+                        </div>
+                        <div class="form-group" style="grid-column: span 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Đề tài chủ đạo (phân cách dấu phẩy):</label>
+                            <input type="text" id="compFormThemes" class="input-control" placeholder="Quê hương, Tình làng nghĩa xóm" style="font-size: 0.85rem;">
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Phân tích ca từ / Điệp khúc mẫu cho AI học:</label>
+                            <textarea id="compFormSample" class="input-control" rows="2" placeholder="Chorus mẫu: [C] Hỏi nắng đi đâu [Am] mà nắng không về..." style="font-size: 0.85rem; height: 50px;"></textarea>
+                        </div>
+                        <div style="grid-column: span 2; display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                            <button type="button" class="btn-action btn-sm btn-secondary" id="btnCancelComposerForm">Hủy</button>
+                            <button type="submit" class="btn-action btn-sm btn-primary" id="btnSaveComposer"><i data-lucide="check"></i> Lưu Nhạc sĩ</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
