@@ -1413,6 +1413,23 @@ function initSunoIntegration() {
         alert("Đã thêm tài khoản thủ công thành công!");
     });
     
+    // Cập nhật giá trị hiển thị của thanh trượt
+    const styleInfSlider = document.getElementById("sunoStyleInfluence");
+    const styleInfVal = document.getElementById("sunoStyleInfluenceVal");
+    if (styleInfSlider && styleInfVal) {
+        styleInfSlider.addEventListener("input", () => {
+            styleInfVal.textContent = parseFloat(styleInfSlider.value).toFixed(2);
+        });
+    }
+
+    const weirdSlider = document.getElementById("sunoWeirdness");
+    const weirdVal = document.getElementById("sunoWeirdnessVal");
+    if (weirdSlider && weirdVal) {
+        weirdSlider.addEventListener("input", () => {
+            weirdVal.textContent = parseFloat(weirdSlider.value).toFixed(2);
+        });
+    }
+
     // Sáng tác nhạc trên Suno
     if (btnGenMusic) btnGenMusic.addEventListener("click", generateSunoMusic);
 }
@@ -1889,6 +1906,11 @@ async function generateSunoMusic() {
             const chkInstrumental = document.getElementById("chkSunoInstrumental");
             const makeInstrumental = chkInstrumental ? chkInstrumental.checked : false;
             
+            const styleInfluenceSlider = document.getElementById("sunoStyleInfluence");
+            const styleInfluence = styleInfluenceSlider ? parseFloat(styleInfluenceSlider.value) : 0.70;
+            const weirdnessSlider = document.getElementById("sunoWeirdness");
+            const weirdness = weirdnessSlider ? parseFloat(weirdnessSlider.value) : 0.0;
+
             const response = await fetch("/api/suno/generate", {
                 method: "POST",
                 headers: {
@@ -1908,7 +1930,9 @@ async function generateSunoMusic() {
                     model_version: modelVersion,
                     make_instrumental: makeInstrumental,
                     account_email: account.email,
-                    cookie: account.cookie || ""
+                    cookie: account.cookie || "",
+                    weirdness: weirdness,
+                    style_influence: styleInfluence
                 })
             });
             

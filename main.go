@@ -140,8 +140,10 @@ type SunoGenerateRequest struct {
 	Title              string `json:"title"`
 	ModelVersion       string `json:"model_version"`
 	MakeInstrumental   bool   `json:"make_instrumental"`
-	AccountEmail       string `json:"account_email"`
-	Cookie             string `json:"cookie"`
+	AccountEmail       string  `json:"account_email"`
+	Cookie             string  `json:"cookie"`
+	Weirdness          float64 `json:"weirdness"`
+	StyleInfluence     float64 `json:"style_influence"`
 }
 
 type SunoFeedRequest struct {
@@ -657,18 +659,26 @@ func main() {
 			modelVersion = "chirp-fenix" // default to v5.5
 		}
 
-		// Build payload for Suno
+		promptText := req.Prompt
+		if req.MakeInstrumental {
+			promptText = "[Instrumental]"
+		}
+
 		transactionUUID := generateUUID()
 		lyricsProjectID := generateUUID()
 
 		sunoPayload := map[string]interface{}{
-			"generation_type":   "TEXT",
-			"title":             req.Title,
-			"tags":              req.Tags,
-			"negative_tags":     "",
-			"mv":                modelVersion,
-			"prompt":            req.Prompt,
-			"make_instrumental": req.MakeInstrumental,
+			"generation_type":      "TEXT",
+			"title":                req.Title,
+			"tags":                 req.Tags,
+			"negative_tags":        "",
+			"mv":                   modelVersion,
+			"prompt":               promptText,
+			"make_instrumental":    req.MakeInstrumental,
+			"weirdness":            req.Weirdness,
+			"weirdness_constraint": req.Weirdness,
+			"style_influence":      req.StyleInfluence,
+			"style_weight":         req.StyleInfluence,
 			"metadata": map[string]interface{}{
 				"web_client_pathname":          "/create",
 				"is_max_mode":                  false,

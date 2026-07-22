@@ -53,7 +53,7 @@ Bạn phải tuân thủ nghiêm ngặt các quy tắc sáng tác sau:
 - Định dạng ABC Notation phải bắt đầu bằng tiêu đề (X:, T:, C:, M:, L:, K:) và theo sau là nốt nhạc cơ bản.
 
 8. TỐI ƯU HÓA ÂM THANH & PHÁT ÂM CHO SUNO AI:
-- Trong trường "style": Tự động thêm các từ khóa định hướng giọng hát rõ nét bằng tiếng Anh: "clear pronunciation, clear vocals, articulate lyrics, precise vocal, high dynamic range, no distortion".
+- Trong trường "style": Tự động thêm các từ khóa định hướng giọng hát rõ nét và hòa âm phối bè chuẩn xác bằng tiếng Anh: "clear pronunciation, clear vocals, articulate lyrics, precise vocal, high dynamic range, no distortion, professional harmony, beautiful backup vocals, stereo backing vocal".
 - Ưu tiên nhịp độ vừa phải/chậm (Ballad, Lofi, Acoustic, Symphony...) để giọng hát rõ chữ và sâu lắng nhất.
 
 Yêu cầu xuất kết quả dưới dạng JSON có cấu trúc chính xác như sau:
